@@ -48,6 +48,18 @@ CollectionReference? _clothesCollection;
     await _usersCollection?.doc(userProfile.uid).set(userProfile);
   }
 
+  Future<void> addClothForUser(String uid, Cloth cloth) async {
+    // Define the path for the user's clothes
+    CollectionReference<Cloth> userClothesCollection = _firebaseFirestore.collection('clothes/users/$uid').withConverter<Cloth>(
+      fromFirestore: (snapshot, _) => Cloth.fromJson(snapshot.data()!),
+      toFirestore: (cloth, _) => cloth.toJson(),
+    );
+
+    // Add the cloth to the user's collection
+    await userClothesCollection.add(cloth);
+  }
+
+
   Stream<QuerySnapshot<UserProfile>> getUserProfiles(){
      return _usersCollection?.where('uid',isNotEqualTo: _authService.user!.uid).snapshots() as Stream<QuerySnapshot<UserProfile>>;
   }
@@ -89,18 +101,19 @@ Future<String?> getFullNameByUid(String uid) async {
 }
 
 Stream<List<Cloth>> getClothesByUid(String uid) {
-  return _clothesCollection!
-      .where('uid', isEqualTo: uid) // Query clothes by the user's UID
-      .snapshots()
-      .map((snapshot) => snapshot.docs
-          .map((doc) {
-            // Ensure that the data is not null and is of type Cloth
-            final data = doc.data();
-            return data != null ? data as Cloth : null; // Cast with null check
-          })
-          .whereType<Cloth>() // Filter out any null values
-          .toList());
+  // Define the path for the user's clothes
+  CollectionReference<Cloth> userClothesCollection = _firebaseFirestore
+      .collection('clothes/users/$uid')
+      .withConverter<Cloth>(
+        fromFirestore: (snapshot, _) => Cloth.fromJson(snapshot.data()!),
+        toFirestore: (cloth, _) => cloth.toJson(),
+      );
+
+  return userClothesCollection.snapshots().map((snapshot) {
+    return snapshot.docs.map((doc) => doc.data()).toList(); // Directly return the Cloth objects
+  });
 }
+
 
 
 
