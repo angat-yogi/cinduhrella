@@ -1,5 +1,6 @@
 import 'package:cinduhrella/screens/closet_page.dart';
 import 'package:cinduhrella/screens/feed_page.dart';
+import 'package:cinduhrella/screens/style_page.dart';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
@@ -16,7 +17,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
    String userName = 'Loading...'; // User's name
-   String profileImageUrl = 'https://via.placeholder.com/150'; // Placeholder profile image URL
+   String profileImageUrl = ''; // Placeholder profile image URL
   final GetIt _getIt = GetIt.instance;
   late AuthService _authService;
   late NavigationService _navigationService;
@@ -52,7 +53,7 @@ class _HomePageState extends State<HomePage> {
   static final List<Widget> _widgetOptions = <Widget>[
      FeedPage(), // Replace this with your feed page widget
     const ClosetPage(), // Replace this with your messages page widget
-    const ClosetPage(), // Replace this with your groups page widget
+     StylePage(), // Replace this with your groups page widget
   ];
 
   void _onItemTapped(int index) {

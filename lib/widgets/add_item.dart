@@ -20,28 +20,16 @@ class AddItemForm extends StatefulWidget {
 class _AddItemFormState extends State<AddItemForm> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
-   final GetIt _getIt = GetIt.instance;
+  final GetIt _getIt = GetIt.instance;
+  
   late AuthService _authService;
   late NavigationService _navigationService;
   late AlertService _alertService;
   late MediaService _mediaService;
   late StorageService _storageService;
   late DatabaseService _databaseService;
-  bool isLoading=false;
 
-  String? email, password, username,fullname, confirmPassword;
-  File? _profileImage;
-
-  @override
-  void initState() {
-    super.initState();
-    _authService = _getIt.get<AuthService>();
-    _navigationService = _getIt.get<NavigationService>();
-    _alertService = _getIt.get<AlertService>();
-    _mediaService = _getIt.get<MediaService>();
-    _storageService=_getIt.get<StorageService>();
-    _databaseService=_getIt.get<DatabaseService>();
-  }
+  bool isLoading = false;
 
   String? _brand;
   String? _size;
@@ -51,6 +39,32 @@ class _AddItemFormState extends State<AddItemForm> {
   String? _selectedType;
 
   final List<String> _clothingTypes = ['Top', 'Bottom', 'Accessories'];
+final List<String> _brands = [
+    'Zara',
+    'Adidas',
+    'Nike',
+    'H&M',
+    'Puma',
+    'Levi\'s',
+    'Uniqlo',
+    'Forever 21',
+    'Calvin Klein',
+    'The North Face',
+    'Other'
+  ]; 
+  final List<String> _sizes = ['Extra Small (XS)','Small (S)', 'Medium (M)', 'Large (L)', 'Extra Large (XXL)'];
+  final List<String> _colors = ['Red', 'Blue', 'Green','Purple','Grey','White','Black','Other'];
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = _getIt.get<AuthService>();
+    _navigationService = _getIt.get<NavigationService>();
+    _alertService = _getIt.get<AlertService>();
+    _mediaService = _getIt.get<MediaService>();
+    _storageService = _getIt.get<StorageService>();
+    _databaseService = _getIt.get<DatabaseService>();
+  }
 
   Future<void> _selectImage() async {
     final pickedFile = await _picker.pickImage(
@@ -69,31 +83,29 @@ class _AddItemFormState extends State<AddItemForm> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      // Upload the image and get the download URL
       if (_imagePath != null) {
         String? downloadUrl = await _storageService.uploadClothImage(
           file: File(_imagePath!),
-          uid: _authService.user!.uid, // Replace with the actual user UID
+          uid: _authService.user!.uid,
           clothType: _selectedType!,
         );
 
         if (downloadUrl != null) {
-          // Create a Cloth object and save to Firestore
-           String clothId = '${_authService.user!.uid}_${_selectedType}_${DateTime.now().millisecondsSinceEpoch}';
+          String clothId = '${_authService.user!.uid}_${_selectedType}_${DateTime.now().millisecondsSinceEpoch}';
           Cloth newCloth = Cloth(
-          clothId: clothId, // You can generate an ID or leave it empty for Firestore to create
-          uid: _authService.user!.uid,
-          imageUrl: downloadUrl,
-          brand: _brand,
-          size: _size,
-          description: _description,
-          type: _selectedType,
-        );
+            clothId: clothId,
+            uid: _authService.user!.uid,
+            imageUrl: downloadUrl,
+            brand: _brand,
+            size: _size,
+            color: _color,
+            description: _description,
+            type: _selectedType,
+          );
 
-        await _databaseService.addClothForUser(newCloth.uid!, newCloth);
-          Navigator.pop(context); // Go back after saving
+          await _databaseService.addClothForUser(_authService.user!.uid, newCloth);
+          Navigator.pop(context);
         } else {
-          // Handle error: image upload failed
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Image upload failed')),
           );
@@ -113,24 +125,76 @@ class _AddItemFormState extends State<AddItemForm> {
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Brand'),
-                onSaved: (value) => _brand = value,
-                validator: (value) => value!.isEmpty ? 'Please enter a brand' : null,
-              ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Size'),
-                onSaved: (value) => _size = value,
-                validator: (value) => value!.isEmpty ? 'Please enter a size' : null,
-              ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Color'),
-                onSaved: (value) => _color = value,
-                validator: (value) => value!.isEmpty ? 'Please enter a color' : null,
-              ),
               DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Type'),
+                decoration: const InputDecoration(
+                  labelText: 'Brand',
+                  contentPadding: EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
+                ),
+                value: _brand,
+                items: _brands.map((String brand) {
+                  return DropdownMenuItem<String>(
+                    value: brand,
+                    child: Text(brand),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _brand = newValue;
+                  });
+                },
+                validator: (value) => value == null ? 'Please select a brand' : null,
+              ),
+              const SizedBox(height: 16.0), // Added spacing
+              
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Size',
+                  contentPadding: EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
+                ),
+                value: _size,
+                items: _sizes.map((String size) {
+                  return DropdownMenuItem<String>(
+                    value: size,
+                    child: Text(size),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _size = newValue;
+                  });
+                },
+                validator: (value) => value == null ? 'Please select a size' : null,
+              ),
+              const SizedBox(height: 16.0), // Added spacing
+
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Color',
+                  contentPadding: EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
+                ),
+                value: _color,
+                items: _colors.map((String color) {
+                  return DropdownMenuItem<String>(
+                    value: color,
+                    child: Text(color),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _color = newValue;
+                  });
+                },
+                validator: (value) => value == null ? 'Please select a color' : null,
+              ),
+              const SizedBox(height: 16.0), // Added spacing
+
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Type',
+                  contentPadding: EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
+                ),
                 value: _selectedType,
                 items: _clothingTypes.map((String type) {
                   return DropdownMenuItem<String>(
@@ -145,25 +209,37 @@ class _AddItemFormState extends State<AddItemForm> {
                 },
                 validator: (value) => value == null ? 'Please select a type' : null,
               ),
+              const SizedBox(height: 16.0), // Added spacing
+
               TextFormField(
-                decoration: const InputDecoration(labelText: 'Description'),
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  contentPadding: EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
+                ),
                 onSaved: (value) => _description = value,
                 validator: (value) => value!.isEmpty ? 'Please enter a description' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 16.0), // Added spacing
+
               ElevatedButton(
                 onPressed: _selectImage,
                 child: const Text('Select Image'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 16.0), // Added spacing
+
               if (_imagePath != null)
-                Image.file(
-                  File(_imagePath!),
-                  height: 100,
-                  width: 100,
-                  fit: BoxFit.cover,
+                Column(
+                  children: [
+                    Image.file(
+                      File(_imagePath!),
+                      height: 100,
+                      width: 100,
+                      fit: BoxFit.cover,
+                    ),
+                    const SizedBox(height: 16.0), // Added spacing
+                  ],
                 ),
-              const SizedBox(height: 16),
+              
               ElevatedButton(
                 onPressed: _addCloth,
                 child: const Text('Add Cloth'),

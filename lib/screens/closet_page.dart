@@ -28,7 +28,8 @@ class _ClosetPageState extends State<ClosetPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Closet'),
+         toolbarHeight: 28,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),

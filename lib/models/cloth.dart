@@ -6,6 +6,7 @@ class Cloth {
   String? description;
   String? uid;
   String? type;
+  String? color;
 
   Cloth({
     required this.clothId,
@@ -15,6 +16,7 @@ class Cloth {
     this.size,
     this.description,
     this.type,
+    this.color,
   });
 
   // Named constructor to initialize a Cloth instance from a JSON object
@@ -26,6 +28,7 @@ class Cloth {
     imageUrl = json['imageUrl'];
     description = json['description'];
     type = json['type'];
+    color=json['color'];
   }
 
   // Converts a Cloth instance to a JSON object for saving to Firebase
@@ -38,6 +41,7 @@ class Cloth {
     data['imageUrl'] = imageUrl;
     data['description'] = description;
     data['type'] = type;
+    data['color']=color;
     return data;
   }
 }

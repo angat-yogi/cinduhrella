@@ -100,20 +100,35 @@ Future<String?> getFullNameByUid(String uid) async {
   return null; // Return null if the user does not exist
 }
 
-Stream<List<Cloth>> getClothesByUid(String uid) {
-  // Define the path for the user's clothes
-  CollectionReference<Cloth> userClothesCollection = _firebaseFirestore
-      .collection('clothes/users/$uid')
-      .withConverter<Cloth>(
-        fromFirestore: (snapshot, _) => Cloth.fromJson(snapshot.data()!),
-        toFirestore: (cloth, _) => cloth.toJson(),
-      );
-
-  return userClothesCollection.snapshots().map((snapshot) {
-    return snapshot.docs.map((doc) => doc.data()).toList(); // Directly return the Cloth objects
-  });
+Stream<List<Cloth>> getClothesByUid(String userId) {
+  return _firebaseFirestore
+      .collection('clothes')
+      .doc('users')
+      .collection(userId)
+      .snapshots()
+      .map((snapshot) {
+        return snapshot.docs.map((doc) {
+          return Cloth.fromJson(doc.data());
+        }).toList();
+      });
 }
 
+
+Stream<List<Cloth>> getClothesByUidAndType(String userId, String type) {
+  var a = _firebaseFirestore
+      .collection('clothes')
+      .doc('users')
+      .collection(userId)
+      .snapshots()
+      .map((snapshot) {
+        return snapshot.docs
+            .map((doc) => Cloth.fromJson(doc.data()))
+            .where((cloth) => cloth.type == type) // Filter by type
+            .toList();
+      });
+
+      return a;
+}
 
 
 
