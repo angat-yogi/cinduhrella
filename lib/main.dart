@@ -1,11 +1,15 @@
+import 'dart:io';
+
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/navigation_service.dart';
 import 'package:cinduhrella/utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 
 void main() async {
     await setup();
+    await dotenv.load(fileName: ".env");
   runApp( MyApp());
 }
 

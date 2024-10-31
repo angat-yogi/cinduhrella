@@ -38,8 +38,8 @@ final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
   }
 
 Future<File?> removeBackground(File file) async {
-  const apiKey = Config.removeBgApiKey;
-  const url = Config.url;
+  final apiKey = Config.removeBgApiKey;
+  final url = Config.url;
 
   // Prepare the request
   var request = http.MultipartRequest('POST', Uri.parse(url))
