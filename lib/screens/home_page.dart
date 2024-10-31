@@ -51,9 +51,9 @@ class _HomePageState extends State<HomePage> {
 
 
   static final List<Widget> _widgetOptions = <Widget>[
-     FeedPage(), // Replace this with your feed page widget
+     const FeedPage(), // Replace this with your feed page widget
     const ClosetPage(), // Replace this with your messages page widget
-     StylePage(), // Replace this with your groups page widget
+     const StylePage(), // Replace this with your groups page widget
   ];
 
   void _onItemTapped(int index) {

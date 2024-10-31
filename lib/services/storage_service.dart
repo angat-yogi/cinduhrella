@@ -1,13 +1,14 @@
 import 'dart:io';
 import 'package:cinduhrella/config.dart';
 import 'package:http/http.dart' as http;
-
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:logger/logger.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 class StorageService {
+  final Logger _logger = Logger();
 
 final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
 
@@ -20,6 +21,7 @@ final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
             if(p.state==TaskState.success){
               return fileRef.getDownloadURL();
           }
+            return null;
         }
       );
   }
@@ -30,6 +32,7 @@ final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
             if(p.state==TaskState.success){
               return fileRef.getDownloadURL();
           }
+            return null;
         }
       );
   }
@@ -57,13 +60,12 @@ Future<File?> removeBackground(File file) async {
     await tempFile.writeAsBytes(bytes);
     return tempFile; // Return the processed image file
   } else {
-    print('Failed to remove background: ${response.reasonPhrase}');
+    _logger.e('Failed to remove background: ${response.reasonPhrase}');
     return null; // Return null if the request fails
   }
 }
 
 void uploadImage(String uid, String clothType) async {
-  // Pick an image from the gallery or camera
   final picker = ImagePicker();
   final pickedFile = await picker.pickImage(source: ImageSource.gallery);
   
@@ -72,9 +74,9 @@ void uploadImage(String uid, String clothType) async {
     String? downloadUrl = await uploadClothImage(file: file, uid: uid, clothType: clothType);
     
     if (downloadUrl != null) {
-      print('Uploaded image URL: $downloadUrl');
+      _logger.e('Uploaded image URL: $downloadUrl');
     } else {
-      print('Failed to upload image');
+      _logger.e('Failed to upload image');
     }
   }
 }
@@ -85,10 +87,9 @@ void uploadImage(String uid, String clothType) async {
   required String uid,
   required String clothType,
 }) async {
-  // Remove the background from the image
   File? processedFile = await removeBackground(file);
   if (processedFile == null) {
-    print('Background removal failed');
+    _logger.e('Background removal failed');
     return null; // Handle the failure case
   }
 

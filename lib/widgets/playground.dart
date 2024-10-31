@@ -7,11 +7,11 @@ class PlaygroundWidget extends StatelessWidget {
   final Function(Cloth) onRemoveItem;
 
   const PlaygroundWidget({
-    Key? key,
+    super.key,
     required this.selectedItems,
     required this.onAddItem,
     required this.onRemoveItem,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

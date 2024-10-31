@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:logger/logger.dart';
 
 class AuthService {
   User? _user;
@@ -6,6 +7,7 @@ class AuthService {
     return _user;
   }
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  final Logger _logger = Logger(); // Initialize the logger
 
   AuthService(){
     _firebaseAuth.authStateChanges().listen(authStateChangesListener);  
@@ -27,13 +29,13 @@ Future<bool> signUp(String email, String password) async {
     } on FirebaseAuthException catch (e) {
       // Handle specific Firebase authentication errors
       if (e.code == 'user-not-found') {
-        print('No user found for that email.');
+         _logger.e('No user found for that email.');
       } else if (e.code == 'wrong-password') {
-        print('Wrong password provided for that user.');
+         _logger.e('Wrong password provided for that user.');
       }
     } catch (e) {
       // Handle any other errors
-      print(e);
+       _logger.e(e);
     }
 
     // Return false if sign-in fails
@@ -56,13 +58,13 @@ Future<bool> signUp(String email, String password) async {
     } on FirebaseAuthException catch (e) {
       // Handle specific Firebase authentication errors
       if (e.code == 'user-not-found') {
-        print('No user found for that email.');
+         _logger.e('No user found for that email.');
       } else if (e.code == 'wrong-password') {
-        print('Wrong password provided for that user.');
+         _logger.e('Wrong password provided for that user.');
       }
     } catch (e) {
       // Handle any other errors
-      print(e);
+      _logger.e(e);
     }
 
     // Return false if sign-in fails
@@ -78,7 +80,7 @@ Future<bool> signUp(String email, String password) async {
       return true;
     }
     catch(e){
-      print(e);
+      _logger.e(e);
     }
     return false;
   }

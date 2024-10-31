@@ -17,8 +17,8 @@ Future<void> setup() async {
 
 class MyApp extends StatelessWidget {
    final GetIt _getIt= GetIt.instance;
-  late NavigationService _navigationService;
-  late AuthService _authService;
+  late final NavigationService _navigationService;
+  late final AuthService _authService;
    MyApp({super.key}){
     _navigationService=_getIt.get<NavigationService>();
     _authService=_getIt.get<AuthService>();

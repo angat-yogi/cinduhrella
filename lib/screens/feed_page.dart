@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 class FeedPage extends StatefulWidget {
+  const FeedPage({super.key});
   @override
-  _FeedPageState createState() => _FeedPageState();
+  FeedPageState createState() => FeedPageState();
 }
 
-class _FeedPageState extends State<FeedPage> {
+class FeedPageState extends State<FeedPage> {
   // Sample feed data with votes and comments, will get from API later
   final List<Map<String, dynamic>> feedData = [
     {'type': 'image', 'url': 'https://letsenhance.io/static/8f5e523ee6b2479e26ecc91b9c25261e/1015f/MainAfter.jpg', 'caption': 'Beautiful Scenery', 'votes': 0, 'comments': []},

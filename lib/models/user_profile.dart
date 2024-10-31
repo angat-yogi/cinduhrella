@@ -5,9 +5,7 @@ class UserProfile {
   String? userName;
   String? profilePictureUrl;
 
-  UserProfile({required this.uid, required this.fullName, required this.profilePictureUrl, required this.userName}){
-
-  }
+  UserProfile({required this.uid, required this.fullName, required this.profilePictureUrl, required this.userName});
 
   UserProfile.fromJson(Map<String, dynamic> json){
     uid=json['uid'];
@@ -17,7 +15,7 @@ class UserProfile {
   }
 
 Map<String, dynamic> toJson(){
-  final Map<String, dynamic> data= Map<String, dynamic>();
+  final Map<String, dynamic> data= {};
   data['uid']=uid;
   data['userName']=userName;
   data['fullName']=fullName;

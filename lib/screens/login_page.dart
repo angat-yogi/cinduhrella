@@ -25,7 +25,6 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     _authService=_getIt.get<AuthService>();
     _navigationService=_getIt.get<NavigationService>();
@@ -102,7 +101,7 @@ class _LoginPageState extends State<LoginPage> {
                 });
               },
               obscureText: false,
-              validationRegExp: EMAIL_PATTERN,
+              validationRegExp: emailPattern,
               hintPlaceHolder: "Email", 
               height: MediaQuery.sizeOf(context).height*0.1,
             ),
@@ -113,7 +112,7 @@ class _LoginPageState extends State<LoginPage> {
                 });
               },
               obscureText: true,
-              validationRegExp: PASSWORD_PATTERN,
+              validationRegExp: passwordPattern,
               hintPlaceHolder: "Password",
               height: MediaQuery.sizeOf(context).height*0.1,
             ),

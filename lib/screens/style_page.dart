@@ -7,11 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
 class StylePage extends StatefulWidget {
+  const StylePage({super.key});
   @override
-  _StylePageState createState() => _StylePageState();
+  StylePageState createState() => StylePageState();
 }
 
-class _StylePageState extends State<StylePage> {
+class StylePageState extends State<StylePage> {
   final GetIt _getIt = GetIt.instance;
   late AuthService _authService;
   late AlertService _alertService;

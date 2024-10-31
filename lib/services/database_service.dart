@@ -3,10 +3,11 @@ import 'package:cinduhrella/models/user_profile.dart';
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get_it/get_it.dart';
+import 'package:logger/logger.dart';
 
 
 class DatabaseService {
-
+  final Logger _logger = Logger(); // Initialize the logger
 final FirebaseFirestore _firebaseFirestore = FirebaseFirestore.instance;
 late AuthService _authService;
 
@@ -71,7 +72,7 @@ CollectionReference? _clothesCollection;
       return snapshot.data()?.userName; // Return the username if the document exists
     }
   } catch (e) {
-    print('Error fetching username: $e'); // Handle errors as needed
+    _logger.e('Error fetching username: $e'); // Handle errors as needed
   }
   return null; // Return null if the user does not exist
 }
@@ -83,7 +84,7 @@ CollectionReference? _clothesCollection;
       return snapshot.data()?.profilePictureUrl; // Return the pp if the document exists
     }
   } catch (e) {
-    print('Error fetching profile picture: $e'); // Handle errors as needed
+    _logger.e('Error fetching profile picture: $e'); // Handle errors as needed
   }
   return null; // Return null if the user does not exist
 }
@@ -95,7 +96,7 @@ Future<String?> getFullNameByUid(String uid) async {
       return snapshot.data()?.fullName; // Return the username if the document exists
     }
   } catch (e) {
-    print('Error fetching fullname: $e'); // Handle errors as needed
+    _logger.e('Error fetching fullname: $e'); // Handle errors as needed
   }
   return null; // Return null if the user does not exist
 }

@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'dart:io';
 
+import 'package:logger/logger.dart';
+
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
@@ -19,6 +21,7 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
+    final Logger _logger = Logger();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final GetIt _getIt = GetIt.instance;
   late AuthService _authService;
@@ -73,7 +76,7 @@ class _RegisterPageState extends State<RegisterPage> {
     }    
     }
     catch(e){
-      print(e);
+      _logger.e(e);
       _alertService.showToast(text: "Failed to register. Try again!", icon: Icons.error);
     }
     setState(() {
@@ -142,28 +145,28 @@ Widget _registrationForm() {
             CustomFormField(
               onSaved: (value) => username = value,
               obscureText: false,
-              validationRegExp: USERNAME_PATTERN,
+              validationRegExp: userNamePattern,
               hintPlaceHolder: "Username",
               height: MediaQuery.sizeOf(context).height * 0.1,
             ),
             CustomFormField(
               onSaved: (value) => fullname = value,
               obscureText: false,
-              validationRegExp: NAME_PATTERN,
+              validationRegExp: namePattern,
               hintPlaceHolder: " Full Name",
               height: MediaQuery.sizeOf(context).height * 0.1,
             ),
             CustomFormField(
               onSaved: (value) => email = value,
               obscureText: false,
-              validationRegExp: EMAIL_PATTERN,
+              validationRegExp: emailPattern,
               hintPlaceHolder: "Email",
               height:  MediaQuery.sizeOf(context).height * 0.1,
             ),
             CustomFormField(
               onSaved: (value) => password = value,
               obscureText: true,
-              validationRegExp: PASSWORD_PATTERN,
+              validationRegExp: passwordPattern,
               hintPlaceHolder: "Password",
               height: MediaQuery.sizeOf(context).height * 0.1,
             ),

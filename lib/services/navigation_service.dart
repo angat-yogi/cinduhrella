@@ -6,9 +6,9 @@ import 'package:flutter/material.dart';
 class NavigationService {
   late GlobalKey<NavigatorState> _navigatorKey;
   final Map<String, Widget Function(BuildContext)> _routes={
-    "/login":(context)=>LoginPage(),
-    "/register":(context)=>RegisterPage(),
-    "/home":(context)=>HomePage(),
+    "/login":(context)=>const LoginPage(),
+    "/register":(context)=>const RegisterPage(),
+    "/home":(context)=>const HomePage(),
     //"/chat":(context)=>ChatPage(),
   };
   void push(MaterialPageRoute route){
@@ -16,10 +16,10 @@ class NavigationService {
   }
 
   GlobalKey<NavigatorState> get navigatorKey{
-    return this._navigatorKey;
+    return _navigatorKey;
   }
   Map<String, Widget Function(BuildContext)> get routes{
-    return this._routes;
+    return _routes;
   }
 
   NavigationService(){

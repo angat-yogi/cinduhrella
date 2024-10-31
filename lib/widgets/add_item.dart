@@ -3,28 +3,24 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
-import 'package:cinduhrella/services/media_service.dart';
-import 'package:cinduhrella/services/navigation_service.dart';
 import 'package:cinduhrella/services/storage_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/models/cloth.dart';
 import 'package:get_it/get_it.dart';
 
 class AddItemForm extends StatefulWidget {
-  const AddItemForm({Key? key}) : super(key: key);
+  const AddItemForm({super.key});
 
   @override
-  _AddItemFormState createState() => _AddItemFormState();
+  AddItemFormState createState() => AddItemFormState();
 }
 
-class _AddItemFormState extends State<AddItemForm> {
+class AddItemFormState extends State<AddItemForm> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   final GetIt _getIt = GetIt.instance;
   late AuthService _authService;
-  late NavigationService _navigationService;
   late AlertService _alertService;
-  late MediaService _mediaService;
   late StorageService _storageService;
   late DatabaseService _databaseService;
 
@@ -58,9 +54,7 @@ class _AddItemFormState extends State<AddItemForm> {
   void initState() {
     super.initState();
     _authService = _getIt.get<AuthService>();
-    _navigationService = _getIt.get<NavigationService>();
     _alertService = _getIt.get<AlertService>();
-    _mediaService = _getIt.get<MediaService>();
     _storageService = _getIt.get<StorageService>();
     _databaseService = _getIt.get<DatabaseService>();
   }
@@ -146,8 +140,10 @@ class _AddItemFormState extends State<AddItemForm> {
           );
 
           await _databaseService.addClothForUser(_authService.user!.uid, newCloth);
-          Navigator.pop(context);
-        } else {
+         if (mounted) {
+            Navigator.pop(context);
+          }
+        } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Image upload failed')),
           );
