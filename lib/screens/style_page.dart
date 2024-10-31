@@ -2,6 +2,7 @@ import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
+import 'package:cinduhrella/widgets/playground.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
@@ -123,9 +124,9 @@ void addItemToCategoryBucket(Cloth cloth, String type) {
       data: cloth,
       feedback: Image.network(
         cloth.imageUrl ?? '',
-        fit: BoxFit.cover,
-        width: 80,
-        height: 80,
+        fit: BoxFit.scaleDown,
+        width: 100,
+        height: 100,
       ),
       child: GestureDetector(
         onTap: () => addSelectedItem(cloth),
@@ -152,139 +153,120 @@ void addItemToCategoryBucket(Cloth cloth, String type) {
   }
 
 @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 0,
-        elevation: 0,
-      ),
-      body: Stack(
-        children: [
-          // Left scroll view with "Top" header
-          Positioned(
-            left: 0,
-            top: 20,
-            bottom: 100,
-            child: Column(
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      toolbarHeight: 0,
+      elevation: 0,
+    ),
+    body: Column(
+      children: [
+        // The main content area wrapped in an Expanded widget
+        Expanded(
+          child: SingleChildScrollView(
+            child: Stack(
               children: [
-                const Text('Top', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Expanded(
+                // Left scroll view with "Top" header
+                Positioned(
+                  left: 0,
+                  top: 20,
+                  bottom: 0,
                   child: SizedBox(
-                    width: 100,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 10.0),
-                      itemCount: tops.length,
-                      itemBuilder: (context, index) {
-                        return _buildClothItem(tops[index]);
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Right scroll view with "Bottom" header
-          Positioned(
-            right: 0,
-            top: 20,
-            bottom: 100,
-            child: Column(
-              children: [
-                const Text('Bottom', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: SizedBox(
-                    width: 100,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 10.0),
-                      itemCount: bottoms.length,
-                      itemBuilder: (context, index) {
-                        return _buildClothItem(bottoms[index]);
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Bottom horizontal scroll view with "Accessories" header
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 10,
-            height: 130,
-            child: Column(
-              children: [
-                const Text('Accessories', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: accessories.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                        child: _buildClothItem(accessories[index]),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-Column(
-  children: [
-    const SizedBox(height: 40), // Add space at the top to increase the playground size at the top
-
-    Center(
-      child: DragTarget<Cloth>(
-        // onAccept: (cloth) => addSelectedItem(cloth),
-        builder: (context, candidateData, rejectedData) {
-          return Container(
-            width: 210,
-            height: 440, // Keep this height the same for the bottom part
-            color: const Color.fromARGB(255, 241, 237, 237),
-            child: selectedItems.isNotEmpty
-                ? Stack(
-                  alignment: Alignment.center,
-                    children: selectedItems.map((cloth) {
-                      return Positioned(
-                        top:10,
-                        left: selectedItems.indexOf(cloth) * 60.0 - (selectedItems.length - 1) * 30.0, // Adjust left for centering
-                        child: GestureDetector(
-                          onDoubleTap: () => removeSelectedItem(cloth), // Double tap to remove
-                          child: Image.network(
-                            cloth.imageUrl ?? '',
-                            width: 200,
-                            height: 200,
+                    width: MediaQuery.of(context).size.width * 0.25, // Set width for left column
+                    child: Column(
+                      children: [
+                        const Text('Top', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(vertical: 10.0),
+                            itemCount: tops.length,
+                            itemBuilder: (context, index) {
+                              return _buildClothItem(tops[index]);
+                            },
                           ),
                         ),
-                      );
-                    }).toList(),
-                  )
-                : const Center(
-                    child: Text(
-                      'Select or drag items here to style',
-                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                      ],
                     ),
                   ),
-          );
-        },
-      ),
+                ),
+                // Right scroll view with "Bottom" header
+                Positioned(
+                  right: 0,
+                  top: 20,
+                  bottom: 0,
+                  child: SizedBox(
+                    width: MediaQuery.of(context).size.width * 0.25, // Set width for right column
+                    child: 
+                    Column(
+                      children: [
+                        const Text('Bottom', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(vertical: 10.0),
+                            itemCount: bottoms.length,
+                            itemBuilder: (context, index) {
+                              return _buildClothItem(bottoms[index]);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Playground widget with selected items
+                Align(
+                  alignment: Alignment.center,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 50), // Space at the top
+                      PlaygroundWidget(
+                        selectedItems: selectedItems,
+                        onAddItem: addSelectedItem,
+                        onRemoveItem: removeSelectedItem,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Bottom horizontal scroll view with "Accessories" header
+       Column(
+          children: [
+            const Text('Accessories', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Container(
+                decoration: const BoxDecoration(
+                  border:  Border(
+                    top:  BorderSide(color: Colors.grey, width: 2), // Top border
+                    bottom:   BorderSide(color: Colors.grey, width: 2), // Bottom border
+                  ),
+                ),
+            margin: const EdgeInsets.symmetric(horizontal: 10.0),
+            child: SizedBox(
+              height: 80,
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                scrollDirection: Axis.horizontal,
+                itemCount: accessories.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                    child: _buildClothItem(accessories[index]),
+                  );
+                },
+              ),
+            ),
+            ),
+          ],
+        ),
+      ],
     ),
+  );
+}
 
-    // Add a Spacer to push the playground up
-    Spacer(),
-  ],
-),
 
-        ],
-      ),
-    );
-  }
 }
