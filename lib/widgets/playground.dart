@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cinduhrella/models/cloth.dart';
+import 'package:cinduhrella/widgets/accessories.dart';
+import 'package:cinduhrella/widgets/botttom_wear.dart';
+import 'package:cinduhrella/widgets/top_wear.dart';
 
 class PlaygroundWidget extends StatelessWidget {
   final List<Cloth> selectedItems;
@@ -13,48 +16,47 @@ class PlaygroundWidget extends StatelessWidget {
     required this.onRemoveItem,
   });
 
+  List<Cloth> _getSelectedTop() {
+    return selectedItems.where((cloth) => cloth.type == 'Top').toList();
+  }
+
+  List<Cloth> _getSelectedBottom() {
+    return selectedItems.where((cloth) => cloth.type == 'Bottom').toList();
+  }
+
+  List<Cloth> _getSelectedAccessory() {
+    return selectedItems.where((cloth) => cloth.type == 'Accessories').toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
       children: [
-        const SizedBox(height: 1), // Add space at the top
-        Center(
-          child: DragTarget<Cloth>(
-            builder: (context, candidateData, rejectedData) {
-              return Container(
-                width: 210,
-                height: 440,
-                color: const Color.fromARGB(255, 241, 237, 237),
-                child: selectedItems.isNotEmpty
-                    ? Stack(
-                        alignment: Alignment.center,
-                        children: selectedItems.map((cloth) {
-                          return Positioned(
-                            top: 10,
-                            left: selectedItems.indexOf(cloth) * 60.0 -
-                                (selectedItems.length - 1) * 30.0,
-                            child: GestureDetector(
-                              onDoubleTap: () => onRemoveItem(cloth),
-                              child: Image.network(
-                                cloth.imageUrl ?? '',
-                                width: 200,
-                                height: 200,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      )
-                    : const Center(
-                        child: Text(
-                          'Select or drag items here to style',
-                          style: TextStyle(fontSize: 18, color: Colors.grey),
-                        ),
-                      ),
-              );
-            },
+        Column(
+          children: [
+            const SizedBox(height: 1),
+            TopWearWidget(
+              selectedItems: _getSelectedTop(),
+              onRemoveItem: onRemoveItem,
+            ),
+            BottomWearWidget(
+              selectedItems: _getSelectedBottom(),
+              onRemoveItem: onRemoveItem,
+            ),
+            AccessoriesWidget(
+            selectedItems: _getSelectedAccessory(),
+            onRemoveItem: onRemoveItem,
           ),
+          ],
         ),
-        //const SizedBox(height: 20), // Spacer to ensure layout stability
+        // Positioned(
+        //   right: 0,
+        //   top: 0,
+        //   child: AccessoriesWidget(
+        //     selectedItems: _getSelectedAccessory(),
+        //     onRemoveItem: onRemoveItem,
+        //   ),
+        // ),
       ],
     );
   }
