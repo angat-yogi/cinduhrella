@@ -3,7 +3,6 @@ import 'package:cinduhrella/screens/feed_page.dart';
 import 'package:cinduhrella/screens/style_page.dart';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
-import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/services/navigation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
@@ -22,7 +21,6 @@ class _HomePageState extends State<HomePage> {
   late AuthService _authService;
   late NavigationService _navigationService;
   late AlertService _alertService;
-  late DatabaseService _databaseService;
   int _selectedIndex = 0;
 
 @override
@@ -31,7 +29,6 @@ class _HomePageState extends State<HomePage> {
   _authService=_getIt.get<AuthService>();
   _navigationService=_getIt<NavigationService>();
   _alertService=_getIt<AlertService>();
-  _databaseService=_getIt<DatabaseService>();
   _fetchProfileDetails();
   }
 
