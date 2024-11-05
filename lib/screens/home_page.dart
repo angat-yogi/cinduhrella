@@ -38,12 +38,12 @@ class _HomePageState extends State<HomePage> {
   Future<void> _fetchProfileDetails() async {
   String? uid = _authService.user?.uid; // Ensure you have the user's UID from auth
   if (uid != null) {
-    String? fetchedUserName = await _databaseService.getFullNameByUid(uid);
-    String? profilePicture = await _databaseService.getProfilePictureByUid(uid); // Ensure this method fetches the profile picture URL
+    String? fetchedUserName = _authService.user?.displayName??'User not found';
+    String? profilePicture =  _authService.user?.photoURL??'assets/profile_picture.jpg'; // Ensure this method fetches the profile picture URL
     
     setState(() {
-      userName = fetchedUserName ?? 'User not found'; // Update username or default if not found
-      profileImageUrl = profilePicture ?? 'assets/profile_picture.jpg'; // Use asset image as fallback
+      userName = fetchedUserName ; 
+      profileImageUrl = profilePicture; 
     });
   }
 }
