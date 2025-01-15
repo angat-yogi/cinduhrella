@@ -1,34 +1,59 @@
-import 'package:cinduhrella/auth_gate.dart';
-import 'package:cinduhrella/firebase_options.dart';
-import 'package:cinduhrella/screens/navigator.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:cinduhrella/services/auth_service.dart';
+import 'package:cinduhrella/services/navigation_service.dart';
+import 'package:cinduhrella/utils.dart';
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await setup();
+  runApp(MyApp());
+}
 
-  runApp(const MyApp());
+Future<void> setup() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await setupFirebase();
+  await registerServices();
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
+  final GetIt _getIt = GetIt.instance;
+  late final NavigationService _navigationService;
+  late final AuthService _authService;
+  MyApp({super.key}) {
+    _navigationService = _getIt.get<NavigationService>();
+    _authService = _getIt.get<AuthService>();
+  }
+  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
+      navigatorKey: _navigationService.navigatorKey,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
       ),
-      initialRoute: '/login',
-      routes: {
-        '/login': (context) => const AuthGate(), // Authentication handling
-        '/main': (context) =>
-            NavigatorScreen(), // Main app screen with bottom navigation
-      },
+      initialRoute: _authService.user != null ? "/home" : "/login",
+      routes: _navigationService.routes,
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+
+  final String title;
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(),
+      body:
+          const Center(), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
