@@ -1,14 +1,8 @@
 import 'dart:io';
-import 'package:http/http.dart' as http;
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:logger/logger.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
 class StorageService {
-  final Logger _logger = Logger();
-
   final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
 
   StorageService();
