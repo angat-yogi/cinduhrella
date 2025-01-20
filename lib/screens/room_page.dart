@@ -7,18 +7,18 @@ class RoomPage extends StatelessWidget {
   final String roomId;
   final String roomName;
 
-  RoomPage({required this.roomId, required this.roomName});
+  const RoomPage({super.key, required this.roomId, required this.roomName});
 
   @override
   Widget build(BuildContext context) {
-    final _firestore = FirebaseFirestore.instance;
+    final firestore = FirebaseFirestore.instance;
     final userId = FirebaseAuth
         .instance.currentUser!.uid; // Replace with the logged-in user ID
 
     return Scaffold(
       appBar: AppBar(title: Text(roomName)),
       body: StreamBuilder(
-        stream: _firestore
+        stream: firestore
             .collection('users/$userId/rooms/$roomId/storages')
             .snapshots(),
         builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
@@ -102,7 +102,7 @@ class RoomPage extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          _showAddStorageDialog(context, _firestore, userId, roomId);
+          _showAddStorageDialog(context, firestore, userId, roomId);
         },
         child: const Icon(Icons.add),
       ),
@@ -148,6 +148,7 @@ class RoomPage extends StatelessWidget {
                   await firestore
                       .collection('users/$userId/rooms/$roomId/storages')
                       .add({'storageName': storageName, 'imageUrl': imageUrl});
+                  // ignore: use_build_context_synchronously
                   Navigator.of(context).pop();
                 }
               },

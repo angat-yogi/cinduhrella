@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -6,7 +7,8 @@ class StoragePage extends StatelessWidget {
   final String storageName;
   final String roomId;
 
-  StoragePage({
+  const StoragePage({
+    super.key,
     required this.storageId,
     required this.storageName,
     required this.roomId,
@@ -14,13 +16,13 @@ class StoragePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userId = "your_user_id"; // Replace with the logged-in user ID
-    final _firestore = FirebaseFirestore.instance;
+    final firestore = FirebaseFirestore.instance;
+    final userId = FirebaseAuth.instance.currentUser!.uid;
 
     return Scaffold(
       appBar: AppBar(title: Text(storageName)),
       body: StreamBuilder(
-        stream: _firestore
+        stream: firestore
             .collection(
                 'users/$userId/rooms/$roomId/storages/$storageId/clothes')
             .snapshots(),

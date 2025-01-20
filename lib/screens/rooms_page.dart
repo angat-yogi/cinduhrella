@@ -5,7 +5,7 @@ import 'room_page.dart';
 class RoomsPage extends StatelessWidget {
   final String userId; // Logged-in user's ID
 
-  const RoomsPage({required this.userId, Key? key}) : super(key: key);
+  const RoomsPage({required this.userId, super.key});
 
   @override
   Widget build(BuildContext context) {

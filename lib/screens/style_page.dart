@@ -4,11 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class StylePage extends StatelessWidget {
   final String userId; // Pass the logged-in user ID
 
-  const StylePage({required this.userId, Key? key}) : super(key: key);
+  const StylePage({required this.userId, super.key});
 
   @override
   Widget build(BuildContext context) {
-    final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     return Scaffold(
       appBar: AppBar(
@@ -16,7 +16,7 @@ class StylePage extends StatelessWidget {
         backgroundColor: Colors.blue,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore
+        stream: firestore
             .collection('users/$userId/clothes')
             .snapshots(), // Fetch user's clothes
         builder: (context, snapshot) {
@@ -126,15 +126,15 @@ class StylePage extends StatelessWidget {
   }
 
   void _updateLikeStatus(String clothId, bool liked) {
-    final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
-    _firestore
+    firestore
         .collection('users/$userId/clothes')
         .doc(clothId)
         .update({'liked': liked}).then((_) {
-      print("Cloth updated successfully");
+      //print("Cloth updated successfully");
     }).catchError((error) {
-      print("Failed to update cloth: $error");
+      //print("Failed to update cloth: $error");
     });
   }
 }
