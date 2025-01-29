@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:cinduhrella/models/to_dos/custom_task.dart';
 import 'package:cinduhrella/models/to_dos/goal.dart';
 import 'package:cinduhrella/models/to_dos/wishlist.dart';

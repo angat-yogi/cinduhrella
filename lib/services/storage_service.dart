@@ -21,6 +21,27 @@ class StorageService {
     });
   }
 
+  Future<String?> uploadRoomImages(
+      {required File file, required String uid}) async {
+    try {
+      String fileName =
+          '${DateTime.now().millisecondsSinceEpoch}${path.extension(file.path)}';
+      Reference fileRef = _firebaseStorage.ref('users/$uid/rooms/$fileName');
+
+      UploadTask task = fileRef.putFile(file);
+      TaskSnapshot snapshot = await task;
+
+      if (snapshot.state == TaskState.success) {
+        return await fileRef.getDownloadURL(); // Return Firebase Storage URL
+      } else {
+        return null; // Upload failed
+      }
+    } catch (e) {
+      print("Upload Error: $e");
+      return null;
+    }
+  }
+
   Future<String?> uploadImageToChat(
       {required File file, required String chatId}) async {
     Reference fileRef = _firebaseStorage.ref('chats/$chatId').child(

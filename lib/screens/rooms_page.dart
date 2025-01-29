@@ -1,3 +1,4 @@
+import 'package:cinduhrella/shared/image_picker_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'room_page.dart';
@@ -43,6 +44,9 @@ class RoomsPage extends StatelessWidget {
             itemCount: rooms.length,
             itemBuilder: (context, index) {
               final room = rooms[index];
+              final imageUrl =
+                  room['imageUrl'] ?? ''; // Get the Firebase Storage URL
+
               return GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -50,7 +54,7 @@ class RoomsPage extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (context) => RoomPage(
                         roomId: room.id,
-                        roomName: room['roomName'], // Pass roomName to RoomPage
+                        roomName: room['roomName'],
                       ),
                     ),
                   );
@@ -68,18 +72,35 @@ class RoomsPage extends StatelessWidget {
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(8.0),
                           ),
-                          child: Image.network(
-                            room['imageUrl'] ??
-                                'https://via.placeholder.com/150',
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                          ),
+                          child: imageUrl.isNotEmpty
+                              ? Image.network(
+                                  imageUrl, // Load image from Firebase Storage
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  loadingBuilder: (context, child, progress) {
+                                    return progress == null
+                                        ? child
+                                        : const Center(
+                                            child: CircularProgressIndicator());
+                                  },
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Image.asset(
+                                    'assets/placeholder.png', // Fallback image
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                  ),
+                                )
+                              : Image.asset(
+                                  'assets/placeholder.png',
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                ),
                         ),
                       ),
                       Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: Text(
-                          room['roomName'], // Replace with your room field name
+                          room['roomName'],
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 16,
@@ -97,80 +118,107 @@ class RoomsPage extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          _showAddRoomDialog(context, firestore);
+          _showAddRoomDialog(context, firestore, userId);
         },
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  void _showAddRoomDialog(BuildContext context, FirebaseFirestore firestore) {
+  void _showAddRoomDialog(
+      BuildContext context, FirebaseFirestore firestore, String userId) {
     final TextEditingController roomNameController = TextEditingController();
-    final TextEditingController imageUrlController = TextEditingController();
+    String? imageUrl; // Store Firebase Storage URL
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Add New Room'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: roomNameController,
-                decoration: const InputDecoration(labelText: 'Room Name'),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Add New Room'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: roomNameController,
+                    decoration: const InputDecoration(labelText: 'Room Name'),
+                  ),
+                  const SizedBox(height: 16),
+                  imageUrl != null
+                      ? Image.network(
+                          imageUrl!, // Display the uploaded image
+                          width: 150,
+                          height: 150,
+                          fit: BoxFit.cover,
+                        )
+                      : const SizedBox.shrink(),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) {
+                          return ImagePickerDialog(
+                            userId: userId,
+                            onImagePicked: (String uploadedImageUrl) {
+                              setState(() {
+                                imageUrl =
+                                    uploadedImageUrl; // Store Firebase Storage URL
+                              });
+                            },
+                          );
+                        },
+                      );
+                    },
+                    child: const Text('Pick Image'),
+                  ),
+                ],
               ),
-              TextField(
-                controller: imageUrlController,
-                decoration: const InputDecoration(labelText: 'Image URL'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                final roomName = roomNameController.text.trim();
-                final imageUrl = imageUrlController.text.trim();
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final roomName = roomNameController.text.trim();
 
-                if (roomName.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Room name cannot be empty!'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
+                    if (roomName.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Room name cannot be empty!'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
 
-                final parsedUri = Uri.tryParse(imageUrl);
-                if (imageUrl.isEmpty ||
-                    parsedUri == null ||
-                    !parsedUri.hasAbsolutePath) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Invalid image URL!'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
+                    if (imageUrl == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please select an image!'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
 
-                await firestore.collection('users/$userId/rooms').add({
-                  'roomName': roomName,
-                  'imageUrl': imageUrl,
-                });
+                    // Save room details to Firestore with Firebase Storage URL
+                    await firestore.collection('users/$userId/rooms').add({
+                      'roomName': roomName,
+                      'imageUrl': imageUrl, // Store Firebase Storage URL
+                    });
 
-                Navigator.of(context).pop();
-              },
-              child: const Text('Add'),
-            ),
-          ],
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
