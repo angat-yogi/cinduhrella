@@ -1,16 +1,17 @@
-import 'dart:convert';
-import 'package:cinduhrella/models/to_dos/custom_task.dart';
-import 'package:cinduhrella/models/to_dos/goal.dart';
-import 'package:cinduhrella/models/to_dos/wishlist.dart';
 import 'package:cinduhrella/screens/rooms_page.dart';
-import 'package:cinduhrella/screens/style_page.dart'; // Replace with your StylePage
+import 'package:cinduhrella/screens/style_page.dart';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/services/navigation_service.dart';
+import 'package:cinduhrella/shared/search_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:crypto/crypto.dart';
+import 'dart:convert';
+import 'package:cinduhrella/models/to_dos/custom_task.dart';
+import 'package:cinduhrella/models/to_dos/goal.dart';
+import 'package:cinduhrella/models/to_dos/wishlist.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -77,18 +78,10 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.checkroom), label: 'Rooms'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.checkroom),
-            label: 'Rooms',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_bag),
-            label: 'Style',
-          ),
+              icon: Icon(Icons.shopping_bag), label: 'Style'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
@@ -97,6 +90,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// **📌 App Bar with Search**
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       toolbarHeight: 100,
@@ -137,8 +131,13 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 10),
           TextField(
+            onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => const SearchPage()));
+            },
+            readOnly: true,
             decoration: InputDecoration(
-              hintText: 'Search...',
+              hintText: 'Search for an item...',
               prefixIcon: const Icon(Icons.search),
               filled: true,
               fillColor: Colors.grey[200],
@@ -146,7 +145,6 @@ class _HomePageState extends State<HomePage> {
                 borderRadius: BorderRadius.circular(30),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
             ),
           ),
         ],
@@ -154,136 +152,147 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// **📌 Home Page Content**
   Widget _buildHomePage() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Goals in Progress',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add, color: Colors.blue),
-                onPressed: _addGoal,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          StreamBuilder<List<Goal>>(
-            stream: _databaseService.getGoals(_authService.user!.uid),
-            builder: (context, snapshot) {
-              // if (!snapshot.hasData) return const CircularProgressIndicator();
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
-                    child:
-                        CircularProgressIndicator()); // Show loading indicator
-              } else if (snapshot.hasData) {
-                final goals = snapshot.data!;
-                return SizedBox(
-                  height: 150,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: goals.length,
-                    itemBuilder: (context, index) {
-                      final goal = goals[index];
-                      return Card(
-                        child: Container(
-                          width: 200,
-                          padding: const EdgeInsets.all(8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(goal.name,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 5),
-                              LinearProgressIndicator(
-                                value: goal.progress / 100,
-                              ),
-                              Text('${goal.progress}% complete'),
-                              IconButton(
-                                icon: const Icon(Icons.add, color: Colors.blue),
-                                onPressed: () => _addTaskToGoal(goal.id!),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              } else {
-                return Text('No data available');
-              }
-            },
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Wishlist Highlights',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          StreamBuilder<List<Wishlist>>(
-            stream: _databaseService.getWishlist(_authService.user!.uid),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const CircularProgressIndicator();
-              final wishlist = snapshot.data!;
-              if (wishlist.isEmpty) {
-                return const Text('No items in wishlist.');
-              }
-              final nextItem = wishlist.first;
-              return ListTile(
-                leading: Image.network(nextItem.imageUrl),
-                title: Text(nextItem.name),
-                subtitle: Text('Unlock in ${nextItem.pointsNeeded} points'),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Tasks for Today',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add, color: Colors.blue),
-                onPressed: () => _addTaskToGoal(null), // Add to general tasks
-              ),
-            ],
-          ),
-          StreamBuilder<List<CustomTask>>(
-            stream: _databaseService.getTasks(_authService.user!.uid),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const CircularProgressIndicator();
-              final tasks = snapshot.data!;
-              return Column(
-                children: tasks.map((task) {
-                  return CheckboxListTile(
-                    title: Text(task.name),
-                    value: task.completed,
-                    onChanged: (newValue) {
-                      final updatedTask = CustomTask(
-                        id: task.id,
-                        name: task.name,
-                        completed: newValue!,
-                        goalId: task.goalId,
-                      );
-                      _databaseService.updateTask(
-                          _authService.user!.uid, task.id!, updatedTask);
-                    },
-                  );
-                }).toList(),
-              );
-            },
-          ),
+          _buildGoalsSection(),
+          _buildWishlistSection(),
+          _buildTasksSection(),
         ],
       ),
+    );
+  }
+
+  /// **📌 Goals Section**
+  /// **📌 Goals Section**
+  Widget _buildGoalsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Goals in Progress',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            IconButton(
+              icon: const Icon(Icons.add, color: Colors.blue),
+              onPressed: _addGoal,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        StreamBuilder<List<Goal>>(
+          stream: _databaseService.getGoals(_authService.user!.uid),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (snapshot.hasData) {
+              final goals = snapshot.data!;
+              return SizedBox(
+                height: 150,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: goals.length,
+                  itemBuilder: (context, index) {
+                    final goal = goals[index];
+                    return Card(
+                      child: Container(
+                        width: 200,
+                        padding: const EdgeInsets.all(8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    goal.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon:
+                                      const Icon(Icons.add, color: Colors.blue),
+                                  onPressed: () => _addTaskToGoal(goal.id!),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            LinearProgressIndicator(value: goal.progress / 100),
+                            Text('${goal.progress}% complete'),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            } else {
+              return const Text('No goals found.');
+            }
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  /// **📌 Wishlist Section**
+  Widget _buildWishlistSection() {
+    return StreamBuilder<List<Wishlist>>(
+      stream: _databaseService.getWishlist(_authService.user!.uid),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const CircularProgressIndicator();
+        final wishlist = snapshot.data!;
+        if (wishlist.isEmpty) {
+          return const Text('No items in wishlist.');
+        }
+        final nextItem = wishlist.first;
+        return ListTile(
+          leading: Image.network(nextItem.imageUrl),
+          title: Text(nextItem.name),
+          subtitle: Text('Unlock in ${nextItem.pointsNeeded} points'),
+        );
+      },
+    );
+  }
+
+  /// **📌 Tasks Section**
+  Widget _buildTasksSection() {
+    return StreamBuilder<List<CustomTask>>(
+      stream: _databaseService.getTasks(_authService.user!.uid),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const CircularProgressIndicator();
+        final tasks = snapshot.data!;
+        return Column(
+          children: tasks.map((task) {
+            return CheckboxListTile(
+              title: Text(task.name),
+              value: task.completed,
+              onChanged: (newValue) {
+                final updatedTask = CustomTask(
+                  id: task.id,
+                  name: task.name,
+                  completed: newValue!,
+                  goalId: task.goalId,
+                );
+                _databaseService.updateTask(
+                    _authService.user!.uid, task.id!, updatedTask);
+              },
+            );
+          }).toList(),
+        );
+      },
     );
   }
 

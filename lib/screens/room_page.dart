@@ -1,3 +1,4 @@
+import 'package:cinduhrella/shared/image_picker_dialog.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -112,49 +113,90 @@ class RoomPage extends StatelessWidget {
   void _showAddStorageDialog(BuildContext context, FirebaseFirestore firestore,
       String userId, String roomId) {
     final TextEditingController storageNameController = TextEditingController();
-    final TextEditingController imageUrlController = TextEditingController();
+    String? imageUrl; // Store Firebase Storage URL
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Add New Storage'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: storageNameController,
-                decoration: const InputDecoration(labelText: 'Storage Name'),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Add New Storage'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: storageNameController,
+                    decoration:
+                        const InputDecoration(labelText: 'Storage Name'),
+                  ),
+                  const SizedBox(height: 16),
+                  imageUrl != null
+                      ? Image.network(
+                          imageUrl!,
+                          width: 150,
+                          height: 150,
+                          fit: BoxFit.cover,
+                        )
+                      : const SizedBox.shrink(),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) {
+                          return ImagePickerDialog(
+                            userId: userId,
+                            pathType: 'storage',
+                            roomId: roomId, // Required for storage images
+                            onImagePicked: (String uploadedImageUrl) {
+                              setState(() {
+                                imageUrl = uploadedImageUrl;
+                              });
+                            },
+                          );
+                        },
+                      );
+                    },
+                    child: const Text('Pick Image'),
+                  ),
+                ],
               ),
-              TextField(
-                controller: imageUrlController,
-                decoration: const InputDecoration(labelText: 'Image URL'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                final storageName = storageNameController.text.trim();
-                final imageUrl = imageUrlController.text.trim();
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final storageName = storageNameController.text.trim();
 
-                if (storageName.isNotEmpty) {
-                  await firestore
-                      .collection('users/$userId/rooms/$roomId/storages')
-                      .add({'storageName': storageName, 'imageUrl': imageUrl});
-                  // ignore: use_build_context_synchronously
-                  Navigator.of(context).pop();
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
+                    if (storageName.isEmpty || imageUrl == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Storage name and image are required!'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    await firestore
+                        .collection('users/$userId/rooms/$roomId/storages')
+                        .add({
+                      'storageName': storageName,
+                      'imageUrl': imageUrl,
+                    });
+
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

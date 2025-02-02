@@ -161,6 +161,7 @@ class RoomsPage extends StatelessWidget {
                         builder: (context) {
                           return ImagePickerDialog(
                             userId: userId,
+                            pathType: 'room',
                             onImagePicked: (String uploadedImageUrl) {
                               setState(() {
                                 imageUrl =

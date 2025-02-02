@@ -6,9 +6,17 @@ import 'package:image_picker/image_picker.dart';
 class ImagePickerDialog extends StatelessWidget {
   final Function(String) onImagePicked;
   final String userId; // Pass userId to store images correctly
+  final String pathType; // Determines if the image is for "room" or "storage"
+  final String? roomId; // Only needed if uploading storage images
+  final String? storageId;
 
   const ImagePickerDialog(
-      {super.key, required this.onImagePicked, required this.userId});
+      {super.key,
+      required this.onImagePicked,
+      required this.userId,
+      required this.pathType,
+      this.roomId,
+      this.storageId});
 
   Future<void> _pickImage(BuildContext context, ImageSource source) async {
     final ImagePicker picker = ImagePicker();
@@ -26,8 +34,12 @@ class ImagePickerDialog extends StatelessWidget {
       );
 
       // Upload image to Firebase Storage
-      String? imageUrl =
-          await storageService.uploadRoomImages(file: imageFile, uid: userId);
+      String? imageUrl = await storageService.uploadImage(
+          file: imageFile,
+          uid: userId,
+          pathType: pathType,
+          roomId: roomId,
+          storageId: storageId);
 
       // Close loading indicator
       Navigator.of(context).pop();

@@ -21,25 +21,43 @@ class StorageService {
     });
   }
 
-  Future<String?> uploadRoomImages(
-      {required File file, required String uid}) async {
+  Future<String?> uploadImage(
+      {required File file,
+      required String uid,
+      required String pathType,
+      String? roomId, // Only required if uploading a storage image
+      String? storageId}) async {
     try {
       String fileName =
           '${DateTime.now().millisecondsSinceEpoch}${path.extension(file.path)}';
-      Reference fileRef = _firebaseStorage.ref('users/$uid/rooms/$fileName');
 
+      // Determine the correct path for the image
+      String folderPath;
+      if (pathType == 'room') {
+        folderPath = 'users/$uid/rooms/$fileName'; // Room image
+      } else if (pathType == 'storage' && roomId != null) {
+        folderPath =
+            'users/$uid/rooms/$roomId/storages/$fileName'; // Storage image inside room
+      } else if (pathType == 'item' && roomId != null && storageId != null) {
+        folderPath =
+            'users/$uid/rooms/$roomId/storages/$storageId/items/$fileName'; // Item inside storage
+      } else {
+        throw Exception(
+            "Invalid pathType or missing parameters.\npathType: $pathType, roomId: $roomId, storageId: $storageId, userId: $uid");
+      }
+
+      Reference fileRef = _firebaseStorage.ref(folderPath);
       UploadTask task = fileRef.putFile(file);
       TaskSnapshot snapshot = await task;
 
       if (snapshot.state == TaskState.success) {
         return await fileRef.getDownloadURL(); // Return Firebase Storage URL
-      } else {
-        return null; // Upload failed
       }
     } catch (e) {
+      // ignore: avoid_print
       print("Upload Error: $e");
-      return null;
     }
+    return null; // Upload failed
   }
 
   Future<String?> uploadImageToChat(
