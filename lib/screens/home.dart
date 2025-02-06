@@ -1,4 +1,5 @@
 import 'package:cinduhrella/screens/rooms_page.dart';
+import 'package:cinduhrella/screens/saved_outfit.dart';
 import 'package:cinduhrella/screens/style_page.dart';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
@@ -59,6 +60,7 @@ class _HomePageState extends State<HomePage> {
     _buildHomePage(),
     RoomsPage(userId: _authService.user!.uid),
     StylePage(userId: _authService.user!.uid),
+    SavedOutfitsPage(userId: _authService.user!.uid),
   ];
 
   void _onItemTapped(int index) {
@@ -82,9 +84,12 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(icon: Icon(Icons.checkroom), label: 'Rooms'),
           BottomNavigationBarItem(
               icon: Icon(Icons.shopping_bag), label: 'Style'),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Outfits'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
+        unselectedItemColor:
+            Colors.grey, // ✅ Ensure unselected items are visible
         onTap: _onItemTapped,
       ),
     );

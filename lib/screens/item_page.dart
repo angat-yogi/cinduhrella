@@ -48,7 +48,7 @@ class ItemPageState extends State<ItemPage> {
     "H&M",
     "Louis Vuitton",
     "Prada",
-    "Other"
+    "Others"
   ]; // Add more as needed
 
   @override

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cinduhrella/models/cloth.dart';
+import 'package:cinduhrella/models/styled_outfit.dart';
 import 'package:cinduhrella/models/to_dos/custom_task.dart';
 import 'package:cinduhrella/models/to_dos/goal.dart';
 import 'package:cinduhrella/models/to_dos/wishlist.dart';
@@ -509,6 +510,59 @@ class DatabaseService {
     }
   }
 
+  Future<Map<String, List<Map<String, dynamic>>>> fetchUserItems(
+      String userId) async {
+    Map<String, List<Map<String, dynamic>>> categorizedItems = {
+      'top wear': [],
+      'bottom wear': [],
+      'accessories': [],
+    };
+
+    try {
+      // Step 1: Fetch all rooms for the user
+      QuerySnapshot roomsSnapshot =
+          await _firebaseFirestore.collection('users/$userId/rooms').get();
+
+      for (var room in roomsSnapshot.docs) {
+        String roomId = room.id;
+
+        // Step 2: Fetch all storages inside the room
+        QuerySnapshot storagesSnapshot = await _firebaseFirestore
+            .collection('users/$userId/rooms/$roomId/storages')
+            .get();
+
+        for (var storage in storagesSnapshot.docs) {
+          String storageId = storage.id;
+
+          // Step 3: Fetch all items inside the storage
+          QuerySnapshot itemsSnapshot = await _firebaseFirestore
+              .collection(
+                  'users/$userId/rooms/$roomId/storages/$storageId/items')
+              .get();
+
+          for (var item in itemsSnapshot.docs) {
+            var itemData = item.data() as Map<String, dynamic>;
+            itemData['id'] = item.id; // Store Firestore ID for later use
+
+            // Categorize item
+            if (itemData['type'].toString().toLowerCase() == 'top wear') {
+              categorizedItems['top wear']?.add(itemData);
+            } else if (itemData['type'].toString().toLowerCase() ==
+                'bottom wear') {
+              categorizedItems['bottom wear']?.add(itemData);
+            } else {
+              categorizedItems['accessories']?.add(itemData);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print("Error fetching user items: $e");
+    }
+
+    return categorizedItems;
+  }
+
   Stream<List<Wishlist>> getWishlist(String userId) {
     return _firebaseFirestore
         .collection('users/$userId/wishlist')
@@ -520,5 +574,25 @@ class DatabaseService {
         return Wishlist.fromJson(wishlistData);
       }).toList();
     });
+  }
+
+  Future<List<StyledOutfit>> fetchStyledOutfits(String userId) async {
+    try {
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('users/$userId/styledOutfits')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      print("Fetched ${snapshot.docs.length} outfits from Firestore");
+
+      return snapshot.docs.map((doc) {
+        var data = doc.data() as Map<String, dynamic>;
+        data['outfitId'] = doc.id; // Assign Firestore document ID
+        return StyledOutfit.fromJson(data);
+      }).toList();
+    } catch (e) {
+      print("Error fetching styled outfits: $e");
+      return [];
+    }
   }
 }
