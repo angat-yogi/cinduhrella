@@ -106,7 +106,6 @@ class ItemPageState extends State<ItemPage> {
     if (itemData == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-
     return Scaffold(
       appBar: AppBar(
         title: Text(

@@ -21,14 +21,19 @@ class _StylePageState extends State<StylePage> {
   List<Map<String, dynamic>> bottomWear = [];
   List<Map<String, dynamic>> accessories = [];
   List<Map<String, dynamic>> selectedItems = [];
+  bool isLoading = false;
 
   @override
-  void initState() {
-    super.initState();
-    fetchClothes();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    fetchClothes(); // Fetch data every time the page is revisited
   }
 
-  void fetchClothes() async {
+  Future<void> fetchClothes() async {
+    setState(() {
+      isLoading = true; // Show loading indicator while fetching
+    });
+
     Map<String, List<Map<String, dynamic>>> categorizedItems =
         await databaseService.fetchUserItems(widget.userId);
 
@@ -36,6 +41,7 @@ class _StylePageState extends State<StylePage> {
       topWear = categorizedItems['top wear'] ?? [];
       bottomWear = categorizedItems['bottom wear'] ?? [];
       accessories = categorizedItems['accessories'] ?? [];
+      isLoading = false; // Stop loading indicator
     });
   }
 
@@ -63,58 +69,6 @@ class _StylePageState extends State<StylePage> {
     });
   }
 
-  // Future<void> saveStyledOutfit() async {
-  //   if (selectedItems.isEmpty) {
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       const SnackBar(content: Text("Select items before saving!")),
-  //     );
-  //     return;
-  //   }
-
-  //   try {
-  //     // Convert selected items to Cloth objects
-  //     List<Cloth> clothes = selectedItems.map((item) {
-  //       return Cloth(
-  //         clothId: item['id'],
-  //         storageId: item['storageId'],
-  //         uid: widget.userId,
-  //         imageUrl: item['imageUrl'],
-  //         brand: item['brand'],
-  //         size: item['size'],
-  //         description: item['description'],
-  //         type: item['type'],
-  //         color: item['color'],
-  //       );
-  //     }).toList();
-
-  //     // Create a new StyledOutfit instance
-  //     StyledOutfit outfit = StyledOutfit(
-  //       uid: widget.userId,
-  //       clothes: clothes,
-  //       createdAt: Timestamp.now(),
-  //     );
-
-  //     print("Saving outfit: ${outfit.toJson()}");
-  //     // Save to Firestore
-  //     await firestore
-  //         .collection('users/${widget.userId}/styledOutfits')
-  //         .add(outfit.toJson())
-  //         .then((docRef) => print("Outfit saved with ID: ${docRef.id}"))
-  //         .catchError((error) {
-  //       print("Error writing to Firestore: $error");
-  //     });
-
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       const SnackBar(content: Text("Outfit saved successfully!")),
-  //     );
-
-  //     setState(() {
-  //       selectedItems.clear();
-  //     });
-  //   } catch (e) {
-  //     print("Error saving styled outfit: $e");
-  //   }
-  // }
   Future<void> saveStyledOutfit() async {
     if (selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -144,13 +98,8 @@ class _StylePageState extends State<StylePage> {
         createdAt: Timestamp.now(),
       );
 
-      // Debugging: Print Firestore Path
       String path = 'users/${widget.userId}/styledOutfits';
-      print("Saving outfit at Firestore path: $path");
-
-      await firestore.collection(path).add(outfit.toJson()).then((docRef) {
-        print("Outfit saved with ID: ${docRef.id}");
-      });
+      await firestore.collection(path).add(outfit.toJson());
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Outfit saved successfully!")),
@@ -166,55 +115,61 @@ class _StylePageState extends State<StylePage> {
 
   Widget buildClothesColumn(List<Map<String, dynamic>> items, String category) {
     return Expanded(
-      child: ListView.builder(
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          var item = items[index];
-          return GestureDetector(
-            onTap: () => toggleItem(item),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: CachedNetworkImage(
-                imageUrl: item['imageUrl'],
-                width: 80,
-                height: 100,
-                fit: BoxFit.cover,
-                placeholder: (context, url) =>
-                    const CircularProgressIndicator(),
-                errorWidget: (context, url, error) => const Icon(Icons.error),
-              ),
+      child: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                var item = items[index];
+                return GestureDetector(
+                  onTap: () => toggleItem(item),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: CachedNetworkImage(
+                      imageUrl: item['imageUrl'],
+                      width: 80,
+                      height: 100,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) =>
+                          const CircularProgressIndicator(),
+                      errorWidget: (context, url, error) =>
+                          const Icon(Icons.error),
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 
   Widget buildAccessoriesRow() {
     return SizedBox(
       height: 100,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: accessories.length,
-        itemBuilder: (context, index) {
-          var item = accessories[index];
-          return GestureDetector(
-            onTap: () => toggleItem(item),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: CachedNetworkImage(
-                imageUrl: item['imageUrl'],
-                width: 80,
-                height: 80,
-                fit: BoxFit.cover,
-                placeholder: (context, url) =>
-                    const CircularProgressIndicator(),
-                errorWidget: (context, url, error) => const Icon(Icons.error),
-              ),
+      child: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: accessories.length,
+              itemBuilder: (context, index) {
+                var item = accessories[index];
+                return GestureDetector(
+                  onTap: () => toggleItem(item),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    child: CachedNetworkImage(
+                      imageUrl: item['imageUrl'],
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) =>
+                          const CircularProgressIndicator(),
+                      errorWidget: (context, url, error) =>
+                          const Icon(Icons.error),
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 
@@ -275,6 +230,12 @@ class _StylePageState extends State<StylePage> {
       appBar: AppBar(
         title: const Text("Style Your Clothes"),
         backgroundColor: Colors.blue,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: fetchClothes, // Refresh when button is clicked
+          ),
+        ],
       ),
       body: Column(
         children: [

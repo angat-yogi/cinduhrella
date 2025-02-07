@@ -56,70 +56,85 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
     return Scaffold(
       appBar: AppBar(
           title: const Text("Saved Outfits"), backgroundColor: Colors.blue),
-      body: savedOutfits.isEmpty
-          ? const Center(child: Text("No saved outfits yet!"))
-          : ListView.builder(
-              itemCount: savedOutfits.length,
-              itemBuilder: (context, index) {
-                StyledOutfit outfit = savedOutfits[index];
+      body: StreamBuilder<QuerySnapshot>(
+        stream: firestore
+            .collection('users/${widget.userId}/styledOutfits')
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No saved outfits yet!"));
+          }
 
-                return Card(
-                  elevation: 3,
-                  margin: const EdgeInsets.all(10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      children: [
-                        Text("Outfit ${index + 1}",
-                            style: const TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: outfit.clothes.map((cloth) {
-                            return CachedNetworkImage(
-                              imageUrl: cloth.imageUrl!,
-                              width: 80,
-                              height: 100,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) =>
-                                  const CircularProgressIndicator(),
-                              errorWidget: (context, url, error) =>
-                                  const Icon(Icons.error),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.thumb_up,
-                                  color: outfit.liked
-                                      ? Colors.green
-                                      : Colors.grey),
-                              onPressed: () => updateOutfitLikeStatus(
-                                  outfit.outfitId!, true),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.thumb_down,
-                                  color: outfit.liked == false
-                                      ? Colors.redAccent
-                                      : Colors.grey),
-                              onPressed: () => updateOutfitLikeStatus(
-                                  outfit.outfitId!, false),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+          List<StyledOutfit> outfits = snapshot.data!.docs.map((doc) {
+            return StyledOutfit.fromFirestore(doc);
+          }).toList();
+
+          return ListView.builder(
+            itemCount: outfits.length,
+            itemBuilder: (context, index) {
+              StyledOutfit outfit = outfits[index];
+
+              return Card(
+                elevation: 3,
+                margin: const EdgeInsets.all(10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    children: [
+                      Text("Outfit ${index + 1}",
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: outfit.clothes.map((cloth) {
+                          return CachedNetworkImage(
+                            imageUrl: cloth.imageUrl!,
+                            width: 80,
+                            height: 100,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) =>
+                                const CircularProgressIndicator(),
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.error),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.thumb_up,
+                                color:
+                                    outfit.liked ? Colors.green : Colors.grey),
+                            onPressed: () =>
+                                updateOutfitLikeStatus(outfit.outfitId!, true),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.thumb_down,
+                                color: outfit.liked == false
+                                    ? Colors.redAccent
+                                    : Colors.grey),
+                            onPressed: () =>
+                                updateOutfitLikeStatus(outfit.outfitId!, false),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

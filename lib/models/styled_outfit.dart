@@ -34,4 +34,19 @@ class StyledOutfit {
       'clothes': clothes.map((cloth) => cloth.toJson()).toList(),
     };
   }
+
+  factory StyledOutfit.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+    return StyledOutfit(
+      outfitId: doc.id, // Firestore document ID
+      uid: data['uid'] ?? '', // Ensure uid is provided
+      createdAt: data['createdAt'] ??
+          Timestamp.now(), // Use Timestamp.now() if missing
+      liked: data['liked'] ?? false, // Default to false if not set
+      clothes: (data['clothes'] as List<dynamic>).map((item) {
+        return Cloth.fromMap(item as Map<String, dynamic>);
+      }).toList(),
+    );
+  }
 }

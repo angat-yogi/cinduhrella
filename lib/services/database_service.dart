@@ -595,4 +595,32 @@ class DatabaseService {
       return [];
     }
   }
+
+  Future<void> assignItemToRoomStorage(String userId, String itemId,
+      String roomId, String? storageId, Map<String, dynamic> itemData) async {
+    try {
+      DocumentReference itemRef = FirebaseFirestore.instance
+          .collection('users/$userId/unassigned')
+          .doc(itemId);
+
+      if (storageId != null) {
+        // Move to storage inside a room
+        await FirebaseFirestore.instance
+            .collection('users/$userId/rooms/$roomId/storages/$storageId/items')
+            .doc(itemId)
+            .set(itemData);
+      } else {
+        // Move to room only (without storage)
+        await FirebaseFirestore.instance
+            .collection('users/$userId/rooms/$roomId/items')
+            .doc(itemId)
+            .set(itemData);
+      }
+
+      // Remove from unassigned collection
+      await itemRef.delete();
+    } catch (e) {
+      print("Error assigning item: $e");
+    }
+  }
 }

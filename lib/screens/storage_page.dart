@@ -15,6 +15,116 @@ class StoragePage extends StatelessWidget {
     required this.storageName,
     required this.roomId,
   });
+  void _showItemOptions(BuildContext context, FirebaseFirestore firestore,
+      String userId, DocumentSnapshot item, String roomId, String storageId) {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Edit Item'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ItemPage(
+                        itemId: item.id,
+                        roomId: roomId,
+                        storageId: storageId,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Delete Item',
+                    style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmDeleteItem(
+                      context, firestore, userId, item, roomId, storageId);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteItem(BuildContext context, FirebaseFirestore firestore,
+      String userId, DocumentSnapshot item, String roomId, String storageId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Delete Item"),
+          content: const Text("Are you sure you want to delete this item?"),
+          actions: [
+            TextButton(
+              child: const Text("Cancel"),
+              onPressed: () => Navigator.pop(context),
+            ),
+            TextButton(
+              child: const Text("Delete", style: TextStyle(color: Colors.red)),
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteItem(
+                    context, firestore, userId, item, roomId, storageId);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteItem(
+      BuildContext context,
+      FirebaseFirestore firestore,
+      String userId,
+      DocumentSnapshot item,
+      String roomId,
+      String storageId) async {
+    DocumentReference itemRef = firestore
+        .collection(
+          'users/$userId/rooms/$roomId/storages/$storageId/items',
+        )
+        .doc(item.id);
+
+    DocumentSnapshot itemSnapshot = await itemRef.get();
+
+    if (itemSnapshot.exists) {
+      Map<String, dynamic> itemData =
+          itemSnapshot.data() as Map<String, dynamic>;
+
+      // Move the item to `users/uid/deleted`
+      await firestore.collection('users/$userId/deleted').doc(item.id).set({
+        ...itemData,
+        'deletedAt': Timestamp.now(),
+        'originalRoomId': roomId,
+        'originalStorageId': storageId,
+      });
+
+      // Delete the item from the original location
+      await itemRef.delete();
+
+      // ✅ Show SnackBar with the correct context
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Item moved to deleted items."),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,14 +156,15 @@ class StoragePage extends StatelessWidget {
           return GridView.builder(
             padding: const EdgeInsets.all(8.0),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3, // Three items per row
+              crossAxisCount: 3,
               crossAxisSpacing: 8.0,
               mainAxisSpacing: 8.0,
-              childAspectRatio: 0.75, // Adjust aspect ratio to fit images
+              childAspectRatio: 0.75,
             ),
             itemCount: items.length,
             itemBuilder: (context, index) {
               final item = items[index];
+
               return GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -66,6 +177,10 @@ class StoragePage extends StatelessWidget {
                       ),
                     ),
                   );
+                },
+                onLongPress: () {
+                  _showItemOptions(
+                      context, firestore, userId, item, roomId, storageId);
                 },
                 child: Card(
                   elevation: 4,
@@ -125,6 +240,7 @@ class StoragePage extends StatelessWidget {
     );
   }
 
+  // ✅ Function to Add a New Item
   void _showAddItemDialog(BuildContext context, FirebaseFirestore firestore,
       String userId, String roomId, String storageId) {
     final TextEditingController descriptionController = TextEditingController();
@@ -150,7 +266,7 @@ class StoragePage extends StatelessWidget {
       "Louis Vuitton",
       "Prada",
       "Others"
-    ]; // Add more as needed
+    ];
     final List<String> colors = [
       "Black",
       "White",
@@ -178,10 +294,7 @@ class StoragePage extends StatelessWidget {
                       value: selectedBrand,
                       decoration: const InputDecoration(labelText: "Brand"),
                       items: brands.map((size) {
-                        return DropdownMenuItem(
-                          value: size,
-                          child: Text(size),
-                        );
+                        return DropdownMenuItem(value: size, child: Text(size));
                       }).toList(),
                       onChanged: (newValue) {
                         setState(() {
@@ -195,10 +308,7 @@ class StoragePage extends StatelessWidget {
                       value: selectedSize,
                       decoration: const InputDecoration(labelText: "Size"),
                       items: sizes.map((size) {
-                        return DropdownMenuItem(
-                          value: size,
-                          child: Text(size),
-                        );
+                        return DropdownMenuItem(value: size, child: Text(size));
                       }).toList(),
                       onChanged: (newValue) {
                         setState(() {
@@ -212,10 +322,7 @@ class StoragePage extends StatelessWidget {
                       value: selectedType,
                       decoration: const InputDecoration(labelText: "Type"),
                       items: types.map((type) {
-                        return DropdownMenuItem(
-                          value: type,
-                          child: Text(type),
-                        );
+                        return DropdownMenuItem(value: type, child: Text(type));
                       }).toList(),
                       onChanged: (newValue) {
                         setState(() {
@@ -230,9 +337,7 @@ class StoragePage extends StatelessWidget {
                       decoration: const InputDecoration(labelText: "Color"),
                       items: colors.map((color) {
                         return DropdownMenuItem(
-                          value: color,
-                          child: Text(color),
-                        );
+                            value: color, child: Text(color));
                       }).toList(),
                       onChanged: (newValue) {
                         setState(() {
@@ -251,12 +356,8 @@ class StoragePage extends StatelessWidget {
 
                     const SizedBox(height: 16),
                     imageUrl != null
-                        ? Image.network(
-                            imageUrl!,
-                            width: 150,
-                            height: 150,
-                            fit: BoxFit.cover,
-                          )
+                        ? Image.network(imageUrl!,
+                            width: 150, height: 150, fit: BoxFit.cover)
                         : const SizedBox.shrink(),
                     const SizedBox(height: 16),
 
@@ -287,15 +388,11 @@ class StoragePage extends StatelessWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
+                  onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
                 TextButton(
                   onPressed: () async {
-                    final description = descriptionController.text.trim();
-
                     if (selectedBrand == null ||
                         selectedSize == null ||
                         selectedType == null ||
@@ -303,15 +400,13 @@ class StoragePage extends StatelessWidget {
                         imageUrl == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content:
-                              Text('All fields and an image are required!'),
-                          backgroundColor: Colors.red,
-                        ),
+                            content:
+                                Text('All fields and an image are required!'),
+                            backgroundColor: Colors.red),
                       );
                       return;
                     }
 
-                    // Save item details to Firestore
                     await firestore
                         .collection(
                             'users/$userId/rooms/$roomId/storages/$storageId/items')
@@ -320,8 +415,8 @@ class StoragePage extends StatelessWidget {
                       'size': selectedSize,
                       'type': selectedType,
                       'color': selectedColor,
-                      'description': description,
-                      'imageUrl': imageUrl, // Store Firebase Storage URL
+                      'description': descriptionController.text.trim(),
+                      'imageUrl': imageUrl,
                     });
 
                     Navigator.of(context).pop();

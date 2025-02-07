@@ -48,4 +48,33 @@ class Cloth {
     data['color'] = color;
     return data;
   }
+
+  factory Cloth.fromMap(Map<String, dynamic> map) {
+    return Cloth(
+      clothId: map['clothId'],
+      storageId: map['storageId'],
+      uid: map['uid'],
+      brand: map['brand'],
+      size: map['size'],
+      imageUrl: map['imageUrl'],
+      description: map['description'],
+      type: map['type'],
+      color: map['color'],
+    );
+  }
+
+  // Converts a Cloth instance to a Map<String, dynamic> for Firestore storage
+  Map<String, dynamic> toMap() {
+    return {
+      'clothId': clothId,
+      'storageId': storageId,
+      'uid': uid,
+      'brand': brand,
+      'size': size,
+      'imageUrl': imageUrl,
+      'description': description,
+      'type': type,
+      'color': color,
+    };
+  }
 }
