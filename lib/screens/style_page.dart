@@ -69,6 +69,50 @@ class _StylePageState extends State<StylePage> {
     });
   }
 
+  // Future<void> saveStyledOutfit() async {
+  //   if (selectedItems.isEmpty) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       const SnackBar(content: Text("Select items before saving!")),
+  //     );
+  //     return;
+  //   }
+
+  //   try {
+  //     List<Cloth> clothes = selectedItems.map((item) {
+  //       return Cloth(
+  //         clothId: item['id'],
+  //         storageId: item['storageId'],
+  //         uid: widget.userId,
+  //         imageUrl: item['imageUrl'],
+  //         brand: item['brand'],
+  //         size: item['size'],
+  //         description: item['description'],
+  //         type: item['type'],
+  //         color: item['color'],
+  //       );
+  //     }).toList();
+
+  //     StyledOutfit outfit = StyledOutfit(
+  //       uid: widget.userId,
+  //       clothes: clothes,
+  //       createdAt: Timestamp.now(),
+  //     );
+
+  //     String path = 'users/${widget.userId}/styledOutfits';
+  //     await firestore.collection(path).add(outfit.toJson());
+
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       const SnackBar(content: Text("Outfit saved successfully!")),
+  //     );
+
+  //     setState(() {
+  //       selectedItems.clear();
+  //     });
+  //   } catch (e) {
+  //     print("Error saving styled outfit: $e");
+  //   }
+  // }
+
   Future<void> saveStyledOutfit() async {
     if (selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,6 +122,11 @@ class _StylePageState extends State<StylePage> {
     }
 
     try {
+      // ✅ Extract the first word of each clothing's description
+      String generatedName = selectedItems
+          .map((item) => (item['description'] ?? '').split(' ').first)
+          .join(' ');
+
       List<Cloth> clothes = selectedItems.map((item) {
         return Cloth(
           clothId: item['id'],
@@ -94,6 +143,9 @@ class _StylePageState extends State<StylePage> {
 
       StyledOutfit outfit = StyledOutfit(
         uid: widget.userId,
+        name: generatedName.isNotEmpty
+            ? generatedName
+            : 'Unnamed Outfit', // ✅ Default name if empty
         clothes: clothes,
         createdAt: Timestamp.now(),
       );

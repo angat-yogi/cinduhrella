@@ -34,10 +34,8 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
 
   Future<void> updateOutfitLikeStatus(String outfitId, bool liked) async {
     try {
-      await firestore
-          .collection('users/${widget.userId}/styledOutfits')
-          .doc(outfitId)
-          .update({'liked': liked});
+      await databaseService.updateOutfitLikeStatus(
+          widget.userId, outfitId, liked);
 
       setState(() {
         for (var outfit in savedOutfits) {
@@ -49,6 +47,103 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
     } catch (e) {
       print("Error updating like status: $e");
     }
+  }
+
+  Future<void> deleteOutfit(String outfitId) async {
+    bool confirmDelete = await _showDeleteConfirmation();
+    if (!confirmDelete) return;
+
+    try {
+      await firestore
+          .collection('users/${widget.userId}/styledOutfits')
+          .doc(outfitId)
+          .delete();
+
+      setState(() {
+        savedOutfits.removeWhere((outfit) => outfit.outfitId == outfitId);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Outfit deleted successfully!")),
+      );
+    } catch (e) {
+      print("Error deleting outfit: $e");
+    }
+  }
+
+  Future<void> editOutfitName(String outfitId, String currentName) async {
+    TextEditingController nameController =
+        TextEditingController(text: currentName);
+
+    bool saveChanges = await _showEditDialog(nameController);
+    if (!saveChanges) return;
+
+    try {
+      await firestore
+          .collection('users/${widget.userId}/styledOutfits')
+          .doc(outfitId)
+          .update({'name': nameController.text.trim()});
+
+      setState(() {
+        for (var outfit in savedOutfits) {
+          if (outfit.outfitId == outfitId) {
+            outfit.name = nameController.text.trim();
+          }
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Outfit name updated!")),
+      );
+    } catch (e) {
+      print("Error updating outfit name: $e");
+    }
+  }
+
+  Future<bool> _showDeleteConfirmation() async {
+    return await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Delete Outfit"),
+            content: const Text("Are you sure you want to delete this outfit?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child:
+                    const Text("Delete", style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<bool> _showEditDialog(TextEditingController nameController) async {
+    return await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Edit Outfit Name"),
+            content: TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: "Enter new name"),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text("Save"),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   @override
@@ -86,9 +181,32 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
                   padding: const EdgeInsets.all(10),
                   child: Column(
                     children: [
-                      Text("Outfit ${index + 1}",
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(outfit.name,
+                                style: const TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          Row(
+                            children: [
+                              IconButton(
+                                icon:
+                                    const Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () => editOutfitName(
+                                    outfit.outfitId!, outfit.name),
+                              ),
+                              IconButton(
+                                icon:
+                                    const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () => deleteOutfit(outfit.outfitId!),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 10),
                       Wrap(
                         spacing: 10,

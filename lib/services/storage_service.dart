@@ -52,6 +52,8 @@ class StorageService {
             'users/$uid/rooms/$roomId/storages/$storageId/items/$fileName';
       } else if (pathType == 'unassigned') {
         folderPath = 'users/$uid/unassigned/$fileName';
+      } else if (pathType == 'trips') {
+        folderPath = 'users/$uid/trips/$fileName';
       } else {
         throw Exception(
             "Invalid pathType or missing parameters.\npathType: $pathType, roomId: $roomId, storageId: $storageId, userId: $uid");

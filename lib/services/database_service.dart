@@ -424,6 +424,35 @@ class DatabaseService {
     });
   }
 
+  // Future<List<StyledOutfit>> fetchStyledOutfits(String userId) async {
+  //   try {
+  //     QuerySnapshot snapshot = await _firebaseFirestore
+  //         .collection('users/$userId/styledOutfits')
+  //         .get();
+
+  //     return snapshot.docs.map((doc) {
+  //       return StyledOutfit.fromFirestore(doc);
+  //     }).toList();
+  //   } catch (e) {
+  //     print("Error fetching outfits: $e");
+  //     return [];
+  //   }
+  // }
+
+  // Update outfit like status
+  Future<void> updateOutfitLikeStatus(
+      String userId, String outfitId, bool liked) async {
+    try {
+      await _firebaseFirestore
+          .collection('users/$userId/styledOutfits')
+          .doc(outfitId)
+          .update({'liked': liked});
+    } catch (e) {
+      print("Error updating like status: $e");
+      throw e;
+    }
+  }
+
   Future<void> deleteTask(String userId, String taskId) async {
     try {
       final taskDoc = await _firebaseFirestore
@@ -519,14 +548,14 @@ class DatabaseService {
     };
 
     try {
-      // Step 1: Fetch all rooms for the user
+      // ✅ Step 1: Fetch all rooms for the user
       QuerySnapshot roomsSnapshot =
           await _firebaseFirestore.collection('users/$userId/rooms').get();
 
       for (var room in roomsSnapshot.docs) {
         String roomId = room.id;
 
-        // Step 2: Fetch all storages inside the room
+        // ✅ Step 2: Fetch all storages inside the room
         QuerySnapshot storagesSnapshot = await _firebaseFirestore
             .collection('users/$userId/rooms/$roomId/storages')
             .get();
@@ -534,7 +563,7 @@ class DatabaseService {
         for (var storage in storagesSnapshot.docs) {
           String storageId = storage.id;
 
-          // Step 3: Fetch all items inside the storage
+          // ✅ Step 3: Fetch all items inside the storage
           QuerySnapshot itemsSnapshot = await _firebaseFirestore
               .collection(
                   'users/$userId/rooms/$roomId/storages/$storageId/items')
@@ -542,25 +571,48 @@ class DatabaseService {
 
           for (var item in itemsSnapshot.docs) {
             var itemData = item.data() as Map<String, dynamic>;
-            itemData['id'] = item.id; // Store Firestore ID for later use
+            itemData['id'] = item.id; // Store Firestore ID
+            itemData['roomId'] = roomId;
+            itemData['storageId'] = storageId;
 
-            // Categorize item
-            if (itemData['type'].toString().toLowerCase() == 'top wear') {
-              categorizedItems['top wear']?.add(itemData);
-            } else if (itemData['type'].toString().toLowerCase() ==
-                'bottom wear') {
-              categorizedItems['bottom wear']?.add(itemData);
-            } else {
-              categorizedItems['accessories']?.add(itemData);
-            }
+            // ✅ Categorize item based on type
+            _categorizeItem(itemData, categorizedItems);
           }
         }
+      }
+
+      // ✅ Step 4: Fetch Unassigned Items
+      QuerySnapshot unassignedSnapshot =
+          await _firebaseFirestore.collection('users/$userId/unassigned').get();
+
+      for (var item in unassignedSnapshot.docs) {
+        var itemData = item.data() as Map<String, dynamic>;
+        itemData['id'] = item.id; // Store Firestore ID
+        itemData['roomId'] = null; // Indicate unassigned item
+        itemData['storageId'] = null;
+
+        // ✅ Categorize unassigned item based on type
+        _categorizeItem(itemData, categorizedItems);
       }
     } catch (e) {
       print("Error fetching user items: $e");
     }
 
     return categorizedItems;
+  }
+
+  /// **📌 Helper Function to Categorize Items**
+  void _categorizeItem(Map<String, dynamic> itemData,
+      Map<String, List<Map<String, dynamic>>> categorizedItems) {
+    String itemType = itemData['type'].toString().toLowerCase();
+
+    if (itemType == 'top wear') {
+      categorizedItems['top wear']?.add(itemData);
+    } else if (itemType == 'bottom wear') {
+      categorizedItems['bottom wear']?.add(itemData);
+    } else {
+      categorizedItems['accessories']?.add(itemData);
+    }
   }
 
   Stream<List<Wishlist>> getWishlist(String userId) {

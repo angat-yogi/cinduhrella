@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cinduhrella/screens/rooms_page.dart';
 import 'package:cinduhrella/screens/saved_outfit.dart';
 import 'package:cinduhrella/screens/style_page.dart';
+import 'package:cinduhrella/screens/trip_page.dart';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
@@ -90,6 +91,7 @@ class _HomePageState extends State<HomePage> {
     RoomsPage(userId: _authService.user!.uid),
     StylePage(userId: _authService.user!.uid),
     SavedOutfitsPage(userId: _authService.user!.uid),
+    TripPage(userId: _authService.user!.uid)
   ];
 
   void _onItemTapped(int index) {
@@ -107,12 +109,15 @@ class _HomePageState extends State<HomePage> {
         index: _selectedIndex,
         children: _widgetOptions,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          _showAddItemDialog(context);
-        },
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
+          ? FloatingActionButton(
+              onPressed: () {
+                _showAddItemDialog(
+                    context); // ✅ Add Item only on Home & Rooms Page
+              },
+              child: const Icon(Icons.add),
+            )
+          : null, // ✅ Hides FAB on other pages (Style, Outfits, Trips)
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
@@ -120,6 +125,8 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(
               icon: Icon(Icons.shopping_bag), label: 'Style'),
           BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Outfits'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.card_travel), label: 'Trips'), // ✅ New
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
