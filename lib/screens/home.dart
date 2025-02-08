@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/screens/rooms_page.dart';
 import 'package:cinduhrella/screens/saved_outfit.dart';
 import 'package:cinduhrella/screens/style_page.dart';
@@ -109,7 +110,7 @@ class _HomePageState extends State<HomePage> {
         index: _selectedIndex,
         children: _widgetOptions,
       ),
-      floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
+      floatingActionButton: (_selectedIndex == 0)
           ? FloatingActionButton(
               onPressed: () {
                 _showAddItemDialog(
@@ -299,18 +300,24 @@ class _HomePageState extends State<HomePage> {
                       );
                       return;
                     }
+                    DocumentReference newItemRef = FirebaseFirestore.instance
+                        .collection('users/$_authService.user!.uid/unassigned')
+                        .doc(); // Generate ID for the item
+                    Cloth newCloth = Cloth(
+                      clothId: newItemRef.id, // Assign the generated ID
+                      brand: selectedBrand!,
+                      size: selectedSize!,
+                      type: selectedType!,
+                      color: selectedColor!,
+                      description: descriptionController.text.trim(),
+                      imageUrl: imageUrl!,
+                      storageId: null, // Unassigned item, so no storage ID
+                      uid: _authService.user!.uid,
+                    );
 
-                    await FirebaseFirestore.instance
-                        .collection(
-                            'users/${_authService.user!.uid}/unassigned')
-                        .add({
-                      'brand': selectedBrand,
-                      'size': selectedSize,
-                      'type': selectedType,
-                      'color': selectedColor,
-                      'description': descriptionController.text.trim(),
-                      'imageUrl': imageUrl,
-                    });
+                    // ✅ Use `DatabaseService` to add the item properly
+                    await _databaseService.addUnassignedCloth(
+                        _authService.user!.uid, newCloth);
 
                     Navigator.of(context).pop();
                   },

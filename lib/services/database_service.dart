@@ -5,6 +5,7 @@ import 'package:cinduhrella/models/styled_outfit.dart';
 import 'package:cinduhrella/models/to_dos/custom_task.dart';
 import 'package:cinduhrella/models/to_dos/goal.dart';
 import 'package:cinduhrella/models/to_dos/wishlist.dart';
+import 'package:cinduhrella/models/trip.dart';
 import 'package:cinduhrella/models/user_profile.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -161,14 +162,45 @@ class DatabaseService {
   }
 
   // -------------- CRUD Operations for Clothes ----------------
+  Future<void> addUnassignedCloth(String userId, Cloth cloth) async {
+    try {
+      // Reference to the 'unassigned' collection
+      DocumentReference clothRef = FirebaseFirestore.instance
+          .collection('users/$userId/unassigned')
+          .doc(cloth.clothId);
+
+      // Save the cloth data
+      await clothRef.set({
+        'clothId': cloth.clothId,
+        'brand': cloth.brand,
+        'size': cloth.size,
+        'type': cloth.type,
+        'color': cloth.color,
+        'description': cloth.description,
+        'imageUrl': cloth.imageUrl,
+        'addedAt': Timestamp.now(), // ✅ Timestamp for tracking
+      });
+    } catch (e) {
+      print("Error adding unassigned cloth: $e");
+      throw Exception("Failed to add unassigned cloth.");
+    }
+  }
 
   Future<void> addCloth(
       String userId, String roomId, String storageId, Cloth cloth) async {
     try {
-      await _firebaseFirestore
-          .collection('users/$userId/rooms/$roomId/storages/$storageId/clothes')
-          .add(cloth.toJson());
-      _logger.i("Cloth added successfully");
+      // Create a reference to generate an ID
+      DocumentReference clothRef = _firebaseFirestore
+          .collection('users/$userId/rooms/$roomId/storages/$storageId/items')
+          .doc();
+
+      // Assign the generated ID to `clothId`
+      cloth.clothId = clothRef.id;
+
+      // Save the cloth with its ID
+      await clothRef.set(cloth.toJson());
+
+      _logger.i("Cloth added successfully with ID: ${cloth.clothId}");
     } catch (e) {
       _logger.e('Error adding cloth: $e');
     }
@@ -539,6 +571,68 @@ class DatabaseService {
     }
   }
 
+  Stream<Map<String, List<Map<String, dynamic>>>> fetchUserItemsStream(
+      String userId) {
+    return FirebaseFirestore.instance
+        .collection('users/$userId/rooms')
+        .snapshots()
+        .asyncMap(
+      (roomSnapshot) async {
+        Map<String, List<Map<String, dynamic>>> categorizedItems = {
+          'top wear': [],
+          'bottom wear': [],
+          'accessories': [],
+        };
+
+        for (var room in roomSnapshot.docs) {
+          String roomId = room.id;
+
+          // ✅ Fetch all storages in the room
+          QuerySnapshot storagesSnapshot = await FirebaseFirestore.instance
+              .collection('users/$userId/rooms/$roomId/storages')
+              .get();
+
+          for (var storage in storagesSnapshot.docs) {
+            String storageId = storage.id;
+
+            // ✅ Listen for changes in each storage's items
+            FirebaseFirestore.instance
+                .collection(
+                    'users/$userId/rooms/$roomId/storages/$storageId/items')
+                .snapshots()
+                .listen((itemSnapshot) {
+              for (var item in itemSnapshot.docs) {
+                var itemData = item.data() as Map<String, dynamic>;
+                itemData['id'] = item.id;
+                itemData['roomId'] = roomId;
+                itemData['storageId'] = storageId;
+
+                _categorizeItem(itemData, categorizedItems);
+              }
+            });
+          }
+        }
+
+        // ✅ Listen for Unassigned Items
+        FirebaseFirestore.instance
+            .collection('users/$userId/unassigned')
+            .snapshots()
+            .listen((unassignedSnapshot) {
+          for (var item in unassignedSnapshot.docs) {
+            var itemData = item.data() as Map<String, dynamic>;
+            itemData['id'] = item.id;
+            itemData['roomId'] = null;
+            itemData['storageId'] = null;
+
+            _categorizeItem(itemData, categorizedItems);
+          }
+        });
+
+        return categorizedItems;
+      },
+    );
+  }
+
   Future<Map<String, List<Map<String, dynamic>>>> fetchUserItems(
       String userId) async {
     Map<String, List<Map<String, dynamic>>> categorizedItems = {
@@ -673,6 +767,38 @@ class DatabaseService {
       await itemRef.delete();
     } catch (e) {
       print("Error assigning item: $e");
+    }
+  }
+
+  //Trip related:
+  Future<void> addTrip(String userId, Trip trip) async {
+    try {
+      DocumentReference tripRef =
+          _firebaseFirestore.collection('users/$userId/trips').doc();
+
+      // Assign document ID to trip
+      trip.tripId = tripRef.id;
+
+      // Ensure each cloth and outfit has an ID before saving
+      for (var cloth in trip.items) {
+        if (cloth.clothId == null || cloth.clothId!.isEmpty) {
+          cloth.clothId =
+              FirebaseFirestore.instance.collection('temp').doc().id;
+        }
+      }
+
+      for (var outfit in trip.outfits) {
+        if (outfit.outfitId == null || outfit.outfitId!.isEmpty) {
+          outfit.outfitId =
+              FirebaseFirestore.instance.collection('temp').doc().id;
+        }
+      }
+
+      await tripRef.set(trip.toJson());
+
+      _logger.i("Trip added successfully with ID: ${trip.tripId}");
+    } catch (e) {
+      _logger.e('Error adding trip: $e');
     }
   }
 }

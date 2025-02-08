@@ -1,6 +1,7 @@
 import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/models/styled_outfit.dart';
 import 'package:cinduhrella/models/trip.dart';
+import 'package:cinduhrella/screens/trip_detail.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/shared/image_picker_dialog.dart';
 import 'package:cinduhrella/shared/roadmap.dart';
@@ -20,6 +21,14 @@ class _TripPageState extends State<TripPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshClothes, // ✅ Refresh button
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddTripForm,
         child: const Icon(Icons.add),
@@ -54,6 +63,68 @@ class _TripPageState extends State<TripPage> {
     );
   }
 
+  void _showTripOptions(Trip trip) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.cancel, color: Colors.red),
+              title: const Text("Cancel Trip"),
+              onTap: () {
+                _cancelTrip(trip);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy, color: Colors.blue),
+              title: const Text("Copy Trip"),
+              onTap: () {
+                _copyTrip(trip);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.close),
+              title: const Text("Close"),
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _cancelTrip(Trip trip) async {
+    await FirebaseFirestore.instance
+        .collection('users/${widget.userId}/trips')
+        .doc(trip.tripId)
+        .update({'isCanceled': true}); // ✅ Mark trip as canceled in Firestore
+
+    setState(() {}); // ✅ Update UI
+  }
+
+  /// **🔹 Copy Trip to Create a New One**
+  Future<void> _copyTrip(Trip trip) async {
+    final newTrip = Trip(
+      tripName: "${trip.tripName} (Copy)",
+      fromDate: trip.fromDate,
+      throughDate: trip.throughDate,
+      imageUrl: trip.imageUrl,
+      items: trip.items,
+      outfits: trip.outfits,
+    );
+
+    await FirebaseFirestore.instance
+        .collection('users/${widget.userId}/trips')
+        .add(newTrip.toJson()); // ✅ Copy trip to Firestore
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Trip copied successfully!")),
+    );
+  }
+
   Widget _buildRoadmapWithTrips(List<Trip> trips) {
     if (trips.isEmpty) {
       return const Center(child: Text("No trips available."));
@@ -68,15 +139,12 @@ class _TripPageState extends State<TripPage> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // **Roadmap Background Covering Full Width**
           Positioned.fill(
             child: CustomPaint(
               size: Size(double.infinity, trips.length * 250),
               painter: Roadmap(trips.length),
             ),
           ),
-
-          // **Scrollable Trips Positioned in the Center**
           Column(
             children: trips.asMap().entries.map((entry) {
               int index = entry.key;
@@ -85,108 +153,173 @@ class _TripPageState extends State<TripPage> {
               DateTime endDate = trip.throughDate.toDate();
               int tripDays = endDate.difference(startDate).inDays + 1;
               bool isPastTrip = endDate.isBefore(now);
+              bool isCanceled =
+                  trip.isCanceled ?? false; // ✅ Check if trip is canceled
 
-              return Padding(
-                padding: EdgeInsets.only(
-                  left: index % 2 == 0 ? 60 : 0, // Adjust for better centering
-                  right: index % 2 == 0 ? 0 : 60,
-                  bottom: 50,
-                ),
-                child: Align(
-                  alignment: index % 2 == 0
-                      ? Alignment.centerLeft
-                      : Alignment.centerRight,
-                  child: Container(
-                    width: 170,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isPastTrip ? Colors.grey[300] : Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 5,
-                          spreadRadius: 2,
-                        )
-                      ],
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TripDetailPage(
+                        userId: widget.userId,
+                        trip: trip,
+                        tripId: trip.tripId!,
+                      ),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (trip.imageUrl != null)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(50),
-                            child: Image.network(
-                              trip.imageUrl!,
-                              height: 50,
-                              width: 50,
-                              fit: BoxFit.cover,
-                              color: isPastTrip
-                                  ? Colors.white.withAlpha((0.5 * 255).toInt())
-                                  : null,
-                              colorBlendMode: isPastTrip
-                                  ? BlendMode.modulate
-                                  : BlendMode.srcOver,
+                  );
+                },
+                onLongPress: () {
+                  _showTripOptions(trip);
+                },
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: index % 2 == 0 ? 60 : 0,
+                    right: index % 2 == 0 ? 0 : 60,
+                    bottom: 50,
+                  ),
+                  child: Align(
+                    alignment: index % 2 == 0
+                        ? Alignment.centerLeft
+                        : Alignment.centerRight,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 500),
+                      opacity:
+                          isCanceled ? 0.5 : 1.0, // ✅ Fade effect if canceled
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 170,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color:
+                                  isPastTrip ? Colors.grey[300] : Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 5,
+                                  spreadRadius: 2,
+                                )
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (trip.imageUrl != null)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(50),
+                                    child: Image.network(
+                                      trip.imageUrl!,
+                                      height: 50,
+                                      width: 50,
+                                      fit: BoxFit.cover,
+                                      color: isPastTrip
+                                          ? Colors.white
+                                              .withAlpha((0.5 * 255).toInt())
+                                          : null,
+                                      colorBlendMode: isPastTrip
+                                          ? BlendMode.modulate
+                                          : BlendMode.srcOver,
+                                    ),
+                                  ),
+                                const SizedBox(height: 5),
+
+                                // **Trip Name**
+                                Text(
+                                  trip.tripName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: isCanceled
+                                        ? Colors.red
+                                        : (isPastTrip
+                                            ? Colors.grey[600]
+                                            : Colors.black),
+                                    decoration: isCanceled
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration
+                                            .none, // ✅ Cross-out text
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 3),
+
+                                Text(
+                                  "📅 ${startDate.day}/${startDate.month}/${startDate.year}",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isCanceled
+                                        ? Colors.red
+                                        : (isPastTrip
+                                            ? Colors.grey[600]
+                                            : Colors.black),
+                                    decoration: isCanceled
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                ),
+                                Text(
+                                  "📅 ${endDate.day}/${endDate.month}/${endDate.year}",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isCanceled
+                                        ? Colors.red
+                                        : (isPastTrip
+                                            ? Colors.grey[600]
+                                            : Colors.black),
+                                    decoration: isCanceled
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+
+                                Text(
+                                  "🗓️ $tripDays days",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isCanceled
+                                        ? Colors.red
+                                        : (isPastTrip
+                                            ? Colors.grey[600]
+                                            : Colors.black),
+                                    decoration: isCanceled
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                ),
+                                Text(
+                                  "👗 ${trip.items.length} clothes",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isPastTrip
+                                        ? Colors.grey[600]
+                                        : Colors.black,
+                                    decoration: isCanceled
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                ),
+                                Text(
+                                  "👕 ${trip.outfits.length} outfits",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isPastTrip
+                                        ? Colors.grey[600]
+                                        : Colors.black,
+                                    decoration: isCanceled
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        const SizedBox(height: 5),
-
-                        // **Trip Name**
-                        Text(
-                          trip.tripName,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: isPastTrip ? Colors.grey[600] : Colors.black,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 3),
-
-                        // **Better Date Display**
-                        Text(
-                          "📅 ${startDate.day}/${startDate.month}/${startDate.year}",
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isPastTrip ? Colors.grey[600] : Colors.black,
-                          ),
-                        ),
-                        Text(
-                          "📅 ${endDate.day}/${endDate.month}/${endDate.year}",
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isPastTrip ? Colors.grey[600] : Colors.black,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-
-                        // **Trip Duration**
-                        Text(
-                          "🗓️ $tripDays days",
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isPastTrip ? Colors.grey[600] : Colors.black,
-                          ),
-                        ),
-
-                        // **Number of Clothes & Outfits**
-                        Text(
-                          "👗 ${trip.items.length} clothes",
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isPastTrip ? Colors.grey[600] : Colors.black,
-                          ),
-                        ),
-                        Text(
-                          "👕 ${trip.outfits.length} outfits",
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isPastTrip ? Colors.grey[600] : Colors.black,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -207,6 +340,7 @@ class _TripPageState extends State<TripPage> {
   List<Cloth> selectedClothes = [];
   List<Cloth> availableClothes = [];
   List<StyledOutfit> availableOutfits = [];
+  bool isLoading = false; // ✅ Add a loading state
 
   @override
   void initState() {
@@ -215,30 +349,42 @@ class _TripPageState extends State<TripPage> {
     _fetchOutfits();
   }
 
-  Future<void> _fetchClothes() async {
-    try {
-      Map<String, List<Map<String, dynamic>>> clothesData =
-          await databaseService.fetchUserItems(widget.userId);
+  void _fetchClothes() {
+    setState(() => isLoading = true); // ✅ Show loader
+    databaseService.fetchUserItems(widget.userId).then((categorizedItems) {
       setState(() {
-        availableClothes = clothesData.values.expand((e) {
+        availableClothes = categorizedItems.values.expand((e) {
           return e.map((item) => Cloth.fromMap(item));
         }).toList();
+        isLoading = false; // ✅ Hide loader
       });
-    } catch (e) {
-      print("Error fetching clothes: $e");
-    }
+    }).catchError((error) {
+      setState(() => isLoading = false);
+      print("Error fetching clothes: $error");
+    });
   }
 
-  Future<void> _fetchOutfits() async {
-    try {
-      List<StyledOutfit> outfits =
-          await databaseService.fetchStyledOutfits(widget.userId);
+  void _fetchOutfits() {
+    FirebaseFirestore.instance
+        .collection(
+            'users/${widget.userId}/styledOutfits') // ✅ Listen for new outfits
+        .snapshots()
+        .listen((snapshot) {
       setState(() {
-        availableOutfits = outfits;
+        availableOutfits = snapshot.docs
+            .map((doc) => StyledOutfit.fromFirestore(doc))
+            .toList();
       });
-    } catch (e) {
-      print("Error fetching outfits: $e");
-    }
+    });
+  }
+
+  /// **🔹 Refresh Clothes**
+  Future<void> _refreshClothes() async {
+    _fetchClothes();
+    _fetchOutfits();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Clothes refreshed!")),
+    );
   }
 
   Future<void> _pickImage(Function(void Function()) updateUI) async {
@@ -297,9 +443,11 @@ class _TripPageState extends State<TripPage> {
       items: selectedClothes,
     );
 
-    await FirebaseFirestore.instance
-        .collection('users/${widget.userId}/trips')
-        .add(newTrip.toJson());
+    await databaseService.addTrip(widget.userId, newTrip);
+
+    // FirebaseFirestore.instance
+    //     .collection('users/${widget.userId}/trips')
+    //     .add(newTrip.toJson());
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Trip added successfully!")),

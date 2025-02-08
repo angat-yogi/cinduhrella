@@ -10,13 +10,14 @@ class ImagePickerDialog extends StatelessWidget {
   final String? roomId; // Only needed if uploading storage images
   final String? storageId;
 
-  const ImagePickerDialog(
-      {super.key,
-      required this.onImagePicked,
-      required this.userId,
-      required this.pathType,
-      this.roomId,
-      this.storageId});
+  const ImagePickerDialog({
+    super.key,
+    required this.onImagePicked,
+    required this.userId,
+    required this.pathType,
+    this.roomId,
+    this.storageId,
+  });
 
   Future<void> _pickImage(BuildContext context, ImageSource source) async {
     final ImagePicker picker = ImagePicker();
@@ -26,27 +27,37 @@ class ImagePickerDialog extends StatelessWidget {
       final File imageFile = File(image.path);
       final StorageService storageService = StorageService();
 
-      // Show loading indicator while uploading
+      // ✅ Store context for dialog reference
+      late BuildContext dialogContext;
+
+      // ✅ Show loading indicator while uploading
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
+        builder: (ctx) {
+          dialogContext = ctx; // Assign the dialog's context
+          return const Center(child: CircularProgressIndicator());
+        },
       );
 
-      // Upload image to Firebase Storage
+      // ✅ Upload image to Firebase Storage
       String? imageUrl = await storageService.uploadImage(
-          file: imageFile,
-          uid: userId,
-          pathType: pathType,
-          roomId: roomId,
-          storageId: storageId);
+        file: imageFile,
+        uid: userId,
+        pathType: pathType,
+        roomId: roomId,
+        storageId: storageId,
+      );
 
-      // Close loading indicator
-      Navigator.of(context).pop();
+      // ✅ Close the loading indicator only if widget is still mounted
+      if (dialogContext.mounted) {
+        Navigator.of(dialogContext).pop();
+      }
 
+      // ✅ Return Firebase Storage URL if successful
       if (imageUrl != null) {
-        onImagePicked(imageUrl); // Return Firebase Storage URL
-      } else {
+        onImagePicked(imageUrl);
+      } else if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Image upload failed!'),
@@ -56,7 +67,10 @@ class ImagePickerDialog extends StatelessWidget {
       }
     }
 
-    Navigator.of(context).pop(); // Close the dialog after selection
+    // ✅ Ensure dialog is closed safely
+    if (context.mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override

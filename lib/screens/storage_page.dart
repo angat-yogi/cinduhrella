@@ -1,4 +1,6 @@
+import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/screens/item_page.dart';
+import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/shared/image_picker_dialog.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -8,8 +10,9 @@ class StoragePage extends StatelessWidget {
   final String storageId;
   final String storageName;
   final String roomId;
+  final DatabaseService databaseService = DatabaseService();
 
-  const StoragePage({
+  StoragePage({
     super.key,
     required this.storageId,
     required this.storageName,
@@ -484,18 +487,31 @@ class StoragePage extends StatelessWidget {
                       );
                       return;
                     }
+                    Cloth newCloth = Cloth(
+                      clothId: "", // This will be assigned inside addCloth()
+                      brand: selectedBrand!,
+                      size: selectedSize!,
+                      type: selectedType!,
+                      color: selectedColor!,
+                      description: descriptionController.text.trim(),
+                      imageUrl: imageUrl!,
+                      storageId: storageId,
+                      uid: userId,
+                    );
 
-                    await firestore
-                        .collection(
-                            'users/$userId/rooms/$roomId/storages/$storageId/items')
-                        .add({
-                      'brand': selectedBrand,
-                      'size': selectedSize,
-                      'type': selectedType,
-                      'color': selectedColor,
-                      'description': descriptionController.text.trim(),
-                      'imageUrl': imageUrl,
-                    });
+                    await databaseService.addCloth(
+                        userId, roomId, storageId, newCloth);
+                    // firestore
+                    //     .collection(
+                    //         'users/$userId/rooms/$roomId/storages/$storageId/items')
+                    //     .add({
+                    //   'brand': selectedBrand,
+                    //   'size': selectedSize,
+                    //   'type': selectedType,
+                    //   'color': selectedColor,
+                    //   'description': descriptionController.text.trim(),
+                    //   'imageUrl': imageUrl,
+                    // });
 
                     Navigator.of(context).pop();
                   },

@@ -10,6 +10,7 @@ class Trip {
   String? imageUrl;
   List<StyledOutfit> outfits;
   List<Cloth> items;
+  bool isCanceled; // ✅ Added isCanceled field
 
   // Derived field: Number of days between fromDate and throughDate
   int get numberOfDays {
@@ -26,6 +27,7 @@ class Trip {
     this.imageUrl,
     required this.outfits,
     required this.items,
+    this.isCanceled = false, // ✅ Default to false
   });
 
   // Convert JSON data into a Trip object
@@ -42,6 +44,7 @@ class Trip {
       items: (json['items'] as List<dynamic>)
           .map((item) => Cloth.fromJson(item))
           .toList(),
+      isCanceled: json['isCanceled'] ?? false, // ✅ Fetch isCanceled from JSON
     );
   }
 
@@ -55,6 +58,7 @@ class Trip {
       'imageUrl': imageUrl,
       'outfits': outfits.map((outfit) => outfit.toJson()).toList(),
       'items': items.map((cloth) => cloth.toJson()).toList(),
+      'isCanceled': isCanceled, // ✅ Include isCanceled in Firestore
     };
   }
 
@@ -74,6 +78,8 @@ class Trip {
       items: (data['items'] as List<dynamic>)
           .map((item) => Cloth.fromJson(item))
           .toList(),
+      isCanceled:
+          data['isCanceled'] ?? false, // ✅ Read isCanceled from Firestore
     );
   }
 }

@@ -122,7 +122,7 @@ class _StylePageState extends State<StylePage> {
     }
 
     try {
-      // ✅ Extract the first word of each clothing's description
+      // ✅ Generate a name from the first words of descriptions
       String generatedName = selectedItems
           .map((item) => (item['description'] ?? '').split(' ').first)
           .join(' ');
@@ -141,17 +141,21 @@ class _StylePageState extends State<StylePage> {
         );
       }).toList();
 
+      // ✅ Create Firestore document reference
+      String path = 'users/${widget.userId}/styledOutfits';
+      DocumentReference newOutfitRef =
+          firestore.collection(path).doc(); // Create new doc ref
+
       StyledOutfit outfit = StyledOutfit(
+        outfitId: newOutfitRef.id, // ✅ Store generated Firestore ID
         uid: widget.userId,
-        name: generatedName.isNotEmpty
-            ? generatedName
-            : 'Unnamed Outfit', // ✅ Default name if empty
+        name: generatedName.isNotEmpty ? generatedName : 'Unnamed Outfit',
         clothes: clothes,
         createdAt: Timestamp.now(),
       );
 
-      String path = 'users/${widget.userId}/styledOutfits';
-      await firestore.collection(path).add(outfit.toJson());
+      // ✅ Use `.set()` with generated ID instead of `.add()`
+      await newOutfitRef.set(outfit.toJson());
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Outfit saved successfully!")),
@@ -162,6 +166,9 @@ class _StylePageState extends State<StylePage> {
       });
     } catch (e) {
       print("Error saving styled outfit: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error saving outfit: ${e.toString()}")),
+      );
     }
   }
 
