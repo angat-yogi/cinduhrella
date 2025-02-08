@@ -50,11 +50,89 @@ class StoragePage extends StatelessWidget {
                       context, firestore, userId, item, roomId, storageId);
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.move_to_inbox, color: Colors.orange),
+                title: const Text('Unassign Item',
+                    style: TextStyle(color: Colors.orange)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmUnassignItem(
+                      context, firestore, userId, item, roomId, storageId);
+                },
+              ),
             ],
           ),
         );
       },
     );
+  }
+
+  void _confirmUnassignItem(BuildContext context, FirebaseFirestore firestore,
+      String userId, DocumentSnapshot item, String roomId, String storageId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Unassign Item"),
+          content: const Text("Are you sure you want to unassign this item?"),
+          actions: [
+            TextButton(
+              child: const Text("Cancel"),
+              onPressed: () => Navigator.pop(context),
+            ),
+            TextButton(
+              child: const Text("Unassign",
+                  style: TextStyle(color: Colors.orange)),
+              onPressed: () {
+                Navigator.pop(context);
+                _unassignItem(
+                    context, firestore, userId, item, roomId, storageId);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _unassignItem(
+      BuildContext context,
+      FirebaseFirestore firestore,
+      String userId,
+      DocumentSnapshot item,
+      String roomId,
+      String storageId) async {
+    DocumentReference itemRef = firestore
+        .collection('users/$userId/rooms/$roomId/storages/$storageId/items')
+        .doc(item.id);
+
+    DocumentSnapshot itemSnapshot = await itemRef.get();
+
+    if (itemSnapshot.exists) {
+      Map<String, dynamic> itemData =
+          itemSnapshot.data() as Map<String, dynamic>;
+
+      // Move the item to `users/uid/unassigned`
+      await firestore.collection('users/$userId/unassigned').doc(item.id).set({
+        ...itemData,
+        'unassignedAt': Timestamp.now(),
+        'originalRoomId': roomId,
+        'originalStorageId': storageId,
+      });
+
+      // Delete the item from the original location
+      await itemRef.delete();
+
+      // ✅ Show SnackBar with the correct context
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Item moved to Unassigned items."),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
   }
 
   void _confirmDeleteItem(BuildContext context, FirebaseFirestore firestore,

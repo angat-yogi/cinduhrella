@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cinduhrella/screens/rooms_page.dart';
 import 'package:cinduhrella/screens/saved_outfit.dart';
 import 'package:cinduhrella/screens/style_page.dart';
@@ -32,6 +34,21 @@ class _HomePageState extends State<HomePage> {
   late AlertService _alertService;
   late DatabaseService _databaseService;
   int _selectedIndex = 0;
+  final List<String> _commonSearches = [
+    "Black T-shirt",
+    "Nike Shoes",
+    "Formal Suit",
+    "Leather Jacket",
+    "Casual Jeans",
+    "Adidas Sneakers",
+    "Zara Dress",
+    "Gucci Handbag"
+  ];
+
+  // ✅ Variables to manage dynamic hint text
+  String searchHint = "Search for an item...";
+  int currentHintIndex = 0;
+  Timer? hintTimer;
 
   @override
   void initState() {
@@ -41,6 +58,16 @@ class _HomePageState extends State<HomePage> {
     _alertService = _getIt.get<AlertService>();
     _databaseService = _getIt.get<DatabaseService>();
     _fetchProfileDetails();
+    _startHintRotation(); // ✅ Start rotating search hints
+  }
+
+  void _startHintRotation() {
+    hintTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      setState(() {
+        currentHintIndex = (currentHintIndex + 1) % _commonSearches.length;
+        searchHint = _commonSearches[currentHintIndex];
+      });
+    });
   }
 
   Future<void> _fetchProfileDetails() async {
@@ -337,7 +364,7 @@ class _HomePageState extends State<HomePage> {
             },
             readOnly: true,
             decoration: InputDecoration(
-              hintText: 'Search for an item...',
+              hintText: searchHint,
               prefixIcon: const Icon(Icons.search),
               filled: true,
               fillColor: Colors.grey[200],

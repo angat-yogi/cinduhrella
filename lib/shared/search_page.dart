@@ -39,6 +39,9 @@ class _SearchPageState extends State<SearchPage> {
 
   /// **⏳ Start cycling hints every 2 seconds**
   void _startHintRotation() {
+    // Cancel any existing timer to avoid multiple instances
+    _hintTimer?.cancel();
+
     if (_searchHistory.isNotEmpty) {
       _hintTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
         setState(() {
@@ -135,7 +138,7 @@ class _SearchPageState extends State<SearchPage> {
         _searchHistory = history;
       });
 
-      // Restart hint rotation when new searches are added
+      // 🔥 Restart hint rotation when search history updates
       _startHintRotation();
     }
   }
@@ -146,10 +149,8 @@ class _SearchPageState extends State<SearchPage> {
       _searchHistory = prefs.getStringList('searchHistory') ?? [];
     });
 
-    // Start hint rotation if there are saved searches
-    if (_searchHistory.isNotEmpty) {
-      _startHintRotation();
-    }
+    // 🔥 Ensure hint rotation starts if there are saved searches
+    _startHintRotation();
   }
 
   Future<void> _clearSearchHistory() async {
@@ -160,7 +161,8 @@ class _SearchPageState extends State<SearchPage> {
       _dynamicHint = "Search for an item, color, type, room, or storage...";
     });
 
-    _hintTimer?.cancel(); // Stop hint rotation
+    // 🔥 Stop hint rotation since history is empty
+    _hintTimer?.cancel();
   }
 
   @override
@@ -226,9 +228,14 @@ class _SearchPageState extends State<SearchPage> {
                           height: 50,
                           fit: BoxFit.cover,
                         ),
-                        title: Text(item['brand'] ?? 'Unknown Item'),
+                        title: Text(safeSubstring(item['description'], 10)),
                         subtitle: Text(
-                          "${item['brand']} is located in ${item['roomName']} inside ${item['storageName']}",
+                          truncateText(
+                            "${item['color']} ${safeSubstring(item['description'], 7)} by ${item['brand']} is in ${item['roomName']} inside ${item['storageName']}",
+                            50,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         onTap: () {
                           Navigator.push(
@@ -249,5 +256,18 @@ class _SearchPageState extends State<SearchPage> {
         ],
       ),
     );
+  }
+
+  /// **🔹 Truncate text if it's too long**
+  String truncateText(String text, int maxLength) {
+    return text.length > maxLength
+        ? "${text.substring(0, maxLength)}..."
+        : text;
+  }
+
+  /// **🔹 Safely truncate a string to avoid errors**
+  String safeSubstring(String text, int length) {
+    if (text.isEmpty) return ""; // Handle empty strings
+    return text.length > length ? "${text.substring(0, length)}..." : text;
   }
 }
