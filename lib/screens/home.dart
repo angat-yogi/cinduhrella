@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cinduhrella/authentications/settings.dart';
 import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/screens/rooms_page.dart';
 import 'package:cinduhrella/screens/saved_outfit.dart';
@@ -825,7 +826,13 @@ class _HomePageState extends State<HomePage> {
             leading: const Icon(Icons.settings),
             title: const Text('Settings'),
             onTap: () {
-              _navigationService.pushNamed('/settings');
+              Navigator.pop(context); // Close the drawer
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) =>
+                        const SettingsPage()), // Navigate to Settings Page
+              );
             },
           ),
           ListTile(

@@ -1,3 +1,5 @@
+import 'package:cinduhrella/authentications/change_password.dart';
+import 'package:cinduhrella/authentications/set_up_2fa.dart';
 import 'package:cinduhrella/screens/home.dart';
 import 'package:cinduhrella/screens/login_page.dart';
 import 'package:cinduhrella/screens/register_page.dart';
@@ -9,6 +11,8 @@ class NavigationService {
     "/login": (context) => LoginPage(),
     "/register": (context) => RegisterPage(),
     "/home": (context) => HomePage(),
+    '/change-password': (context) => const ChangePasswordPage(),
+    '/setup-2fa': (context) => const Setup2FAPage()
     //"/chat":(context)=>ChatPage(),
   };
   void push(MaterialPageRoute route) {
@@ -25,6 +29,13 @@ class NavigationService {
 
   NavigationService() {
     _navigatorKey = GlobalKey<NavigatorState>();
+  }
+
+  /// ✅ Use `pushNamedAndReturn` for pages that need to return data
+  Future<T?> pushNamedAndReturn<T>(String routeName,
+      {Object? arguments}) async {
+    return await _navigatorKey.currentState
+        ?.pushNamed<T>(routeName, arguments: arguments);
   }
 
   void pushNamed(String routeName) {
