@@ -51,39 +51,57 @@ class _RegisterPageState extends State<RegisterPage> {
       setState(() {
         isLoading = true;
       });
+
       if (_formKey.currentState!.validate()) {
         _formKey.currentState!.save();
-        bool result = await _authService.signUp(email!, password!);
-        if (result) {
-          String? profilePicture = await _storageService.uploadImages(
-              file: _profileImage!, uid: _authService.user!.uid);
 
-          if (profilePicture != null) {
-            await _databaseService.createUserProfile(
-                userProfile: UserProfile(
-                    uid: _authService.user!.uid,
-                    fullName: fullname,
-                    profilePictureUrl: profilePicture,
-                    userName: username));
-            _navigationService.goBack();
-            _navigationService.pushReplacementNamed("/home");
-          } else {
-            throw Exception("Unable to upload profile picture");
-          }
-          _alertService.showToast(
-              text: "Registration Successful", icon: Icons.check_circle);
-        } else {
+        // ✅ Register User
+        bool result = await _authService.signUp(email!, password!);
+        if (!result) {
           throw Exception("Unable to register user");
         }
+
+        String? profilePicture;
+        if (_profileImage != null) {
+          // ✅ Upload profile image
+          profilePicture = await _storageService.uploadImages(
+            file: _profileImage!,
+            uid: _authService.user!.uid,
+          );
+        }
+
+        // ✅ Create User Profile in Firestore
+        await _databaseService.createUserProfile(
+          userProfile: UserProfile(
+            uid: _authService.user!.uid,
+            fullName: fullname ?? "Unknown User",
+            userName: username ?? "user_${_authService.user!.uid}",
+            profilePictureUrl:
+                profilePicture ?? "https://example.com/default-profile.png",
+            following: [], // ✅ Ensure new users start with an empty following list
+          ),
+        );
+
+        // ✅ Navigate to Home Page
+        _navigationService.goBack();
+        _navigationService.pushReplacementNamed("/home");
+
+        _alertService.showToast(
+          text: "Registration Successful",
+          icon: Icons.check_circle,
+        );
       }
     } catch (e) {
-      _logger.e(e);
+      _logger.e("Registration Error: $e");
       _alertService.showToast(
-          text: "Failed to register. Try again!", icon: Icons.error);
+        text: "Failed to register. Try again!",
+        icon: Icons.error,
+      );
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
     }
-    setState(() {
-      isLoading = false;
-    });
   }
 
   @override

@@ -1,12 +1,19 @@
 import 'dart:async';
+import 'package:cinduhrella/models/user_profile.dart';
 import 'package:cinduhrella/screens/item_page.dart';
+import 'package:cinduhrella/models/social/post.dart';
+import 'package:cinduhrella/services/database_service.dart';
+import 'package:cinduhrella/shared/social/profile_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  final String searchType; // ✅ "items", "users", or "posts"
+
+  const SearchPage({Key? key, required this.searchType}) : super(key: key);
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -15,47 +22,66 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GetIt _getIt = GetIt.instance;
+  late DatabaseService _databaseService;
   final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _allItems = [];
-  List<Map<String, dynamic>> _filteredItems = [];
-  List<String> _searchHistory = [];
-  String _dynamicHint = "Search for an item, color, type, room, or storage...";
 
+  List<dynamic> _allResults = [];
+  List<dynamic> _filteredResults = [];
+  List<String> _searchHistory = [];
+
+  String _dynamicHint = "Search...";
   int _currentHintIndex = 0;
   Timer? _hintTimer;
 
   @override
   void initState() {
     super.initState();
-    _fetchAllItems();
+    _databaseService = _getIt.get<DatabaseService>();
+    _fetchResults();
     _loadSearchHistory();
   }
 
-  @override
-  void dispose() {
-    _hintTimer?.cancel(); // Cancel the timer when the widget is disposed
-    super.dispose();
-  }
-
-  /// **⏳ Start cycling hints every 2 seconds**
-  void _startHintRotation() {
-    // Cancel any existing timer to avoid multiple instances
-    _hintTimer?.cancel();
+  Future<void> _loadSearchHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _searchHistory = prefs.getStringList('searchHistory') ?? [];
+    });
 
     if (_searchHistory.isNotEmpty) {
-      _hintTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-        setState(() {
-          _currentHintIndex = (_currentHintIndex + 1) % _searchHistory.length;
-          _dynamicHint = _searchHistory[_currentHintIndex];
-        });
+      setState(() {
+        _dynamicHint =
+            _searchHistory.first; // Set initial hint to first search history
       });
     }
   }
 
-  Future<void> _fetchAllItems() async {
-    String userId = _auth.currentUser!.uid;
-    List<Map<String, dynamic>> itemsList = [];
+  @override
+  void dispose() {
+    _hintTimer?.cancel();
+    super.dispose();
+  }
 
+  Future<void> _fetchResults() async {
+    String userId = _auth.currentUser!.uid;
+    List<dynamic> results = [];
+
+    if (widget.searchType == "items") {
+      results = await _fetchItems(userId);
+    } else if (widget.searchType == "users") {
+      results = await _databaseService.getAllUsers();
+    } else if (widget.searchType == "posts") {
+      results = await _databaseService.getAllPublicPosts();
+    }
+
+    setState(() {
+      _allResults = results;
+      _filteredResults = results;
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchItems(String userId) async {
+    List<Map<String, dynamic>> itemsList = [];
     QuerySnapshot roomsSnapshot =
         await _firestore.collection('users/$userId/rooms').get();
     for (var roomDoc in roomsSnapshot.docs) {
@@ -85,84 +111,42 @@ class _SearchPageState extends State<SearchPage> {
         }
       }
     }
-
-    setState(() {
-      _allItems = itemsList;
-      _filteredItems = _allItems;
-    });
+    return itemsList;
   }
 
-  void _filterItems(String query) {
+  void _filterResults(String query) {
     if (query.isEmpty) {
       setState(() {
-        _filteredItems = _allItems;
+        _filteredResults = _allResults;
       });
       return;
     }
 
-    List<Map<String, dynamic>> filteredList = _allItems.where((item) {
-      String brand = item['brand'] ?? '';
-      String color = item['color'] ?? '';
-      String type = item['type'] ?? '';
-      String description = item['description'] ?? '';
-      String roomName = item['roomName'] ?? '';
-      String storageName = item['storageName'] ?? '';
-
-      return brand.toLowerCase().contains(query.toLowerCase()) ||
-          color.toLowerCase().contains(query.toLowerCase()) ||
-          type.toLowerCase().contains(query.toLowerCase()) ||
-          description.toLowerCase().contains(query.toLowerCase()) ||
-          roomName.toLowerCase().contains(query.toLowerCase()) ||
-          storageName.toLowerCase().contains(query.toLowerCase());
+    List<dynamic> filteredList = _allResults.where((result) {
+      if (widget.searchType == "items") {
+        return result['description']
+                .toLowerCase()
+                .contains(query.toLowerCase()) ||
+            result['brand'].toLowerCase().contains(query.toLowerCase()) ||
+            result['color'].toLowerCase().contains(query.toLowerCase());
+      } else if (widget.searchType == "users") {
+        return (result as UserProfile)
+                .fullName!
+                .toLowerCase()
+                .contains(query.toLowerCase()) ||
+            result.userName!.toLowerCase().contains(query.toLowerCase());
+      } else if (widget.searchType == "posts") {
+        return (result as Post)
+            .title!
+            .toLowerCase()
+            .contains(query.toLowerCase());
+      }
+      return false;
     }).toList();
 
     setState(() {
-      _filteredItems = filteredList;
+      _filteredResults = filteredList;
     });
-  }
-
-  Future<void> _saveSearchToHistory() async {
-    final query = _searchController.text.trim();
-    if (query.isEmpty) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    List<String> history = prefs.getStringList('searchHistory') ?? [];
-
-    if (!history.contains(query)) {
-      history.insert(0, query);
-      if (history.length > 10) {
-        history.removeLast();
-      }
-      await prefs.setStringList('searchHistory', history);
-      setState(() {
-        _searchHistory = history;
-      });
-
-      // 🔥 Restart hint rotation when search history updates
-      _startHintRotation();
-    }
-  }
-
-  Future<void> _loadSearchHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _searchHistory = prefs.getStringList('searchHistory') ?? [];
-    });
-
-    // 🔥 Ensure hint rotation starts if there are saved searches
-    _startHintRotation();
-  }
-
-  Future<void> _clearSearchHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('searchHistory');
-    setState(() {
-      _searchHistory = [];
-      _dynamicHint = "Search for an item, color, type, room, or storage...";
-    });
-
-    // 🔥 Stop hint rotation since history is empty
-    _hintTimer?.cancel();
   }
 
   @override
@@ -171,10 +155,9 @@ class _SearchPageState extends State<SearchPage> {
       appBar: AppBar(
         title: TextField(
           controller: _searchController,
-          onChanged: _filterItems,
-          onSubmitted: (_) => _saveSearchToHistory(),
+          onChanged: _filterResults,
           decoration: InputDecoration(
-            hintText: _dynamicHint, // **🔥 Dynamic Hint Text**
+            hintText: _dynamicHint,
             prefixIcon: const Icon(Icons.search),
             filled: true,
             fillColor: Colors.grey[200],
@@ -184,90 +167,82 @@ class _SearchPageState extends State<SearchPage> {
             ),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.clear),
-            onPressed: _clearSearchHistory,
-          ),
-        ],
       ),
-      body: Column(
-        children: [
-          if (_searchHistory.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.all(10.0),
-              child: const Text(
-                "Recent Searches",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+      body: _filteredResults.isEmpty
+          ? const Center(child: Text("No results found."))
+          : ListView.builder(
+              itemCount: _filteredResults.length,
+              itemBuilder: (context, index) {
+                final result = _filteredResults[index];
+
+                if (widget.searchType == "items") {
+                  return _buildItemTile(result);
+                } else if (widget.searchType == "users") {
+                  return _buildUserTile(result);
+                } else if (widget.searchType == "posts") {
+                  return _buildPostTile(result);
+                }
+                return Container();
+              },
             ),
-            Wrap(
-              spacing: 8.0,
-              children: _searchHistory.map((query) {
-                return GestureDetector(
-                  onTap: () {
-                    _searchController.text = query;
-                    _filterItems(query);
-                  },
-                  child: Chip(label: Text(query)),
-                );
-              }).toList(),
-            ),
-          ],
-          Expanded(
-            child: _filteredItems.isEmpty
-                ? const Center(child: Text("No matching items found."))
-                : ListView.builder(
-                    itemCount: _filteredItems.length,
-                    itemBuilder: (context, index) {
-                      final item = _filteredItems[index];
-                      return ListTile(
-                        leading: Image.network(
-                          item['imageUrl'] ?? 'https://via.placeholder.com/150',
-                          width: 50,
-                          height: 50,
-                          fit: BoxFit.cover,
-                        ),
-                        title: Text(safeSubstring(item['description'], 10)),
-                        subtitle: Text(
-                          truncateText(
-                            "${item['color']} ${safeSubstring(item['description'], 7)} by ${item['brand']} is in ${item['roomName']} inside ${item['storageName']}",
-                            50,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ItemPage(
-                                itemId: item['itemId'],
-                                roomId: item['roomId'],
-                                storageId: item['storageId'],
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
     );
   }
 
-  /// **🔹 Truncate text if it's too long**
-  String truncateText(String text, int maxLength) {
-    return text.length > maxLength
-        ? "${text.substring(0, maxLength)}..."
-        : text;
+  Widget _buildItemTile(Map<String, dynamic> item) {
+    return ListTile(
+      leading: Image.network(
+        item['imageUrl'] ?? 'https://via.placeholder.com/150',
+        width: 50,
+        height: 50,
+        fit: BoxFit.cover,
+      ),
+      title: Text(item['description'] ?? "Unknown Item"),
+      subtitle: Text("${item['brand']} - ${item['color']}"),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ItemPage(
+              itemId: item['itemId'],
+              roomId: item['roomId'],
+              storageId: item['storageId'],
+            ),
+          ),
+        );
+      },
+    );
   }
 
-  /// **🔹 Safely truncate a string to avoid errors**
-  String safeSubstring(String text, int length) {
-    if (text.isEmpty) return ""; // Handle empty strings
-    return text.length > length ? "${text.substring(0, length)}..." : text;
+  Widget _buildUserTile(UserProfile user) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: NetworkImage(user.profilePictureUrl ??
+            "https://example.com/default-profile.png"),
+      ),
+      title: Text(user.fullName ?? "Unknown User"),
+      subtitle: Text("@${user.userName}"),
+      onTap: () async {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProfilePage(
+              user: user,
+              currentUserId: _auth.currentUser!.uid,
+              isOwnProfile: user.uid == _auth.currentUser!.uid,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPostTile(Post post) {
+    return ListTile(
+      title: Text(post.title ?? "Untitled"),
+      subtitle: Text(post.description ?? "No description"),
+      onTap: () {
+        // Implement navigation to post details if needed
+      },
+    );
   }
 }

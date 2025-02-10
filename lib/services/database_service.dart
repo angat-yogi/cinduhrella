@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cinduhrella/models/cloth.dart';
+import 'package:cinduhrella/models/social/post.dart';
 import 'package:cinduhrella/models/styled_outfit.dart';
 import 'package:cinduhrella/models/to_dos/custom_task.dart';
 import 'package:cinduhrella/models/to_dos/goal.dart';
@@ -246,7 +247,25 @@ class DatabaseService {
 
   Future<void> createUserProfile({required UserProfile userProfile}) async {
     try {
-      await _usersCollection?.doc(userProfile.uid).set(userProfile.toJson());
+      DocumentReference userDoc = _usersCollection!.doc(userProfile.uid);
+      DocumentSnapshot docSnapshot = await userDoc.get();
+
+      // ✅ Only create a new profile if it doesn't exist
+      if (!docSnapshot.exists) {
+        await userDoc.set({
+          "uid": userProfile.uid,
+          "fullName": userProfile.fullName ?? "Unknown User",
+          "userName": userProfile.userName ?? "user_${userProfile.uid}",
+          "profilePictureUrl": userProfile.profilePictureUrl ??
+              "https://example.com/default-profile.png",
+          "followingCount": userProfile.followingCount,
+          "followersCount": userProfile.followersCount,
+          "postCount": userProfile.postCount,
+          "following": userProfile.following.isNotEmpty
+              ? userProfile.following
+              : [], // ✅ Ensure the following list exists
+        });
+      }
     } catch (e) {
       _logger.e('Error creating user profile: $e');
       rethrow;
@@ -799,6 +818,174 @@ class DatabaseService {
       _logger.i("Trip added successfully with ID: ${trip.tripId}");
     } catch (e) {
       _logger.e('Error adding trip: $e');
+    }
+  }
+
+  Future<List<Post>> getPublicPosts(String uid) async {
+    try {
+      // ✅ Step 1: Fetch user profile to get the following list
+      DocumentSnapshot userDoc =
+          await _firebaseFirestore.collection('users').doc(uid).get();
+
+      List<dynamic> following = [];
+      if (userDoc.exists) {
+        following = userDoc['following'] ?? [];
+      }
+
+      print("✅ Following users: $following");
+
+      // ✅ Step 2: Fetch all public posts
+      QuerySnapshot querySnapshot = await _firebaseFirestore
+          .collection('posts')
+          .where('isPublic', isEqualTo: true)
+          .get();
+
+      print("✅ Public Posts Found: ${querySnapshot.docs.length}");
+
+      // ✅ Step 3: Convert documents to `Post` objects
+      List<Post> posts = querySnapshot.docs
+          .map((doc) => Post.fromJson(doc.data() as Map<String, dynamic>))
+          .where((post) =>
+              post.uid != uid && // Don't include user's own posts
+              (following.contains(post.uid) ||
+                  post.isPublic)) // Show followed users' posts or public ones
+          .toList();
+
+      print("✅ Filtered Posts: ${posts.length}");
+
+      return posts;
+    } catch (e) {
+      print("❌ Error fetching public posts: $e");
+      return [];
+    }
+  }
+
+  Future<void> followUser(String currentUserId, String targetUserId) async {
+    DocumentReference currentUserRef =
+        _firebaseFirestore.collection('users').doc(currentUserId);
+    DocumentReference targetUserRef =
+        _firebaseFirestore.collection('users').doc(targetUserId);
+
+    await _firebaseFirestore.runTransaction((transaction) async {
+      DocumentSnapshot currentUserDoc = await transaction.get(currentUserRef);
+      DocumentSnapshot targetUserDoc = await transaction.get(targetUserRef);
+
+      if (!currentUserDoc.exists || !targetUserDoc.exists) return;
+
+      // ✅ Cast data to Map<String, dynamic> before checking keys
+      Map<String, dynamic> currentUserData =
+          currentUserDoc.data() as Map<String, dynamic>? ?? {};
+      Map<String, dynamic> targetUserData =
+          targetUserDoc.data() as Map<String, dynamic>? ?? {};
+
+      List<dynamic> currentFollowing = currentUserData.containsKey('following')
+          ? currentUserData['following']
+          : [];
+
+      List<dynamic> targetFollowers = targetUserData.containsKey('followers')
+          ? targetUserData['followers']
+          : [];
+
+      if (currentFollowing.contains(targetUserId)) {
+        // ✅ Unfollow user
+        transaction.update(currentUserRef, {
+          'following': FieldValue.arrayRemove([targetUserId]),
+          'followingCount': FieldValue.increment(-1),
+        });
+
+        transaction.update(targetUserRef, {
+          'followers': FieldValue.arrayRemove([currentUserId]),
+          'followersCount': FieldValue.increment(-1),
+        });
+      } else {
+        // ✅ Follow user
+        transaction.update(currentUserRef, {
+          'following': FieldValue.arrayUnion([targetUserId]),
+          'followingCount': FieldValue.increment(1),
+        });
+
+        transaction.update(targetUserRef, {
+          'followers': FieldValue.arrayUnion([currentUserId]),
+          'followersCount': FieldValue.increment(1),
+        });
+      }
+    });
+  }
+
+  Future<List<Post>> getAllPublicPosts() async {
+    try {
+      QuerySnapshot snapshot = await _firebaseFirestore
+          .collection('posts')
+          .where('isPublic', isEqualTo: true)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => Post.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print("Error fetching public posts: $e");
+      return [];
+    }
+  }
+
+  Future<List<Post>> getUserPosts(String userId) async {
+    QuerySnapshot snapshot = await FirebaseFirestore.instance
+        .collection("posts")
+        .where("uid", isEqualTo: userId)
+        .orderBy("timestamp", descending: true) // ✅ Sort posts by newest first
+        .get();
+
+    return snapshot.docs.map((doc) => Post.fromDocument(doc)).toList();
+  }
+
+  Future<bool> isFollowing(String currentUserId, String targetUserId) async {
+    DocumentSnapshot userDoc =
+        await _firebaseFirestore.collection('users').doc(currentUserId).get();
+    List<dynamic> following = userDoc['following'] ?? [];
+    return following.contains(targetUserId);
+  }
+
+  Future<List<UserProfile>> getAllUsers() async {
+    try {
+      QuerySnapshot snapshot =
+          await _firebaseFirestore.collection('users').get();
+      return snapshot.docs
+          .map(
+              (doc) => UserProfile.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print("Error fetching users: $e");
+      return [];
+    }
+  }
+
+  Future<void> addPost(Post post) async {
+    try {
+      await _firebaseFirestore
+          .collection('posts')
+          .doc(post.postId)
+          .set(post.toJson());
+    } catch (e) {
+      print("Error adding post: $e");
+    }
+  }
+
+  Future<List<UserProfile>> searchUsers(String query) async {
+    try {
+      QuerySnapshot querySnapshot = await _firebaseFirestore
+          .collection('users')
+          .where('userName', isGreaterThanOrEqualTo: query)
+          .where('userName',
+              isLessThan: query + '\uf8ff') // Firestore search trick
+          .get();
+
+      return querySnapshot.docs
+          .map(
+              (doc) => UserProfile.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print("Error searching users: $e");
+      return [];
     }
   }
 }

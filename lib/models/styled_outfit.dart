@@ -45,12 +45,14 @@ class StyledOutfit {
     return StyledOutfit(
       outfitId: doc.id,
       uid: data['uid'] ?? '',
-      name: data['name'] ?? 'Unnamed Outfit', // ✅ Load name from Firestore
+      name: data['name'] ?? 'Unnamed Outfit',
       createdAt: data['createdAt'] ?? Timestamp.now(),
       liked: data['liked'] ?? false,
-      clothes: (data['clothes'] as List<dynamic>)
-          .map((item) => Cloth.fromJson(item as Map<String, dynamic>))
-          .toList(),
+      // ✅ Fix: If `clothes` is null, return an empty list instead
+      clothes: (data['clothes'] as List<dynamic>?)
+              ?.map((item) => Cloth.fromJson(item as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 }

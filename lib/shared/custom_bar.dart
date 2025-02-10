@@ -59,7 +59,10 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const SearchPage()),
+                  MaterialPageRoute(
+                      builder: (context) => const SearchPage(
+                            searchType: "items",
+                          )),
                 );
               },
               readOnly: true,

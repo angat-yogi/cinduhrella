@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:cinduhrella/models/user_profile.dart';
+import 'package:cinduhrella/screens/outfit_feed.dart';
 import 'package:cinduhrella/screens/rooms_page.dart';
 import 'package:cinduhrella/screens/saved_outfit.dart';
 import 'package:cinduhrella/screens/style_page.dart';
@@ -81,8 +83,28 @@ class _HomePageState extends State<HomePage> {
     RoomsPage(userId: _authService.user!.uid),
     StylePage(userId: _authService.user!.uid),
     SavedOutfitsPage(userId: _authService.user!.uid),
-    TripPage(userId: _authService.user!.uid)
+    TripPage(userId: _authService.user!.uid),
+    FutureBuilder<UserProfile>(
+      future: _getUserProfileInformation(_authService.user!.uid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return const Center(child: Text("Error loading profile"));
+        }
+        return OutfitFeedPage(currentUser: snapshot.data!);
+      },
+    ),
   ];
+  Future<UserProfile> _getUserProfileInformation(String uid) async {
+    return await _databaseService.getUserProfile(uid: uid) ??
+        UserProfile(
+            uid: uid,
+            fullName: "Unknown User",
+            profilePictureUrl: "assets/profile_picture.jpg",
+            userName: "Unknown");
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -93,12 +115,16 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CustomAppBar(
-        userName: userName,
-        profileImageUrl: profileImageUrl,
-        searchHint: searchHint,
-      ),
-      drawer: AppDrawer(userName: userName, profileImageUrl: profileImageUrl),
+      appBar: _selectedIndex == 5
+          ? null
+          : CustomAppBar(
+              userName: userName,
+              profileImageUrl: profileImageUrl,
+              searchHint: searchHint,
+            ),
+      drawer: _selectedIndex == 5
+          ? null
+          : AppDrawer(userName: userName, profileImageUrl: profileImageUrl),
       body: IndexedStack(
         index: _selectedIndex,
         children: _widgetOptions,
@@ -131,7 +157,9 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-              label: 'Trips'), // ✅ New
+              label: 'Trips'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.explore), label: 'Outfit Feed') // ✅ New
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,

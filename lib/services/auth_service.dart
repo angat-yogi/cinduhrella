@@ -48,6 +48,26 @@ class AuthService {
     return false;
   }
 
+  // Future<User?> signInWithGoogle() async {
+  //   // Trigger the Google authentication flow
+  //   final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+
+  //   // If the user cancels the sign-in flow, return null
+  //   if (googleUser == null) return null;
+
+  //   // Obtain the auth details from the request
+  //   final GoogleSignInAuthentication googleAuth =
+  //       await googleUser.authentication;
+
+  //   // Create a new credential
+  //   final AuthCredential credential = GoogleAuthProvider.credential(
+  //     accessToken: googleAuth.accessToken,
+  //     idToken: googleAuth.idToken,
+  //   );
+
+  //   // Once signed in, return the UserCredential
+  //   return (await FirebaseAuth.instance.signInWithCredential(credential)).user;
+  // }
   Future<User?> signInWithGoogle() async {
     // Trigger the Google authentication flow
     final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
@@ -65,8 +85,46 @@ class AuthService {
       idToken: googleAuth.idToken,
     );
 
-    // Once signed in, return the UserCredential
-    return (await FirebaseAuth.instance.signInWithCredential(credential)).user;
+    // Sign in with Firebase
+    UserCredential userCredential =
+        await FirebaseAuth.instance.signInWithCredential(credential);
+    User? user = userCredential.user;
+
+    if (user != null) {
+      // ✅ Save user profile to Firestore
+      await saveUserProfile(user);
+    }
+
+    return user;
+  }
+
+  /// **✅ Function to Save User Profile in Firestore**
+  Future<void> saveUserProfile(User user) async {
+    DocumentReference userDoc =
+        FirebaseFirestore.instance.collection('users').doc(user.uid);
+
+    DocumentSnapshot docSnapshot = await userDoc.get();
+
+    if (!docSnapshot.exists) {
+      // ✅ Create new user profile if it doesn't exist
+      await userDoc.set({
+        "uid": user.uid,
+        "fullName": user.displayName ?? "Unknown User",
+        "userName": user.email?.split('@')[0] ?? "user_${user.uid}",
+        "profilePictureUrl":
+            user.photoURL ?? "https://example.com/default-profile.png",
+        "followingCount": 0,
+        "followersCount": 0,
+        "postCount": 0,
+        "following": [], // ✅ Ensure following list exists
+      });
+    } else {
+      // ✅ Update profile if fields are missing
+      await userDoc.update({
+        "profilePictureUrl": user.photoURL ?? FieldValue.delete(),
+        "fullName": user.displayName ?? FieldValue.delete(),
+      });
+    }
   }
 
   Future<bool> login(String email, String password) async {
