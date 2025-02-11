@@ -63,6 +63,12 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  @override
+  void dispose() {
+    hintTimer?.cancel(); // ✅ Cancel the hint rotation timer
+    super.dispose();
+  }
+
   Future<void> _fetchProfileDetails() async {
     String? uid = _authService.user?.uid;
     if (uid != null) {
@@ -71,10 +77,13 @@ class _HomePageState extends State<HomePage> {
       String? profilePicture = _authService.user?.photoURL ??
           (await _databaseService.getUserProfile(uid: uid))?.profilePictureUrl;
 
-      setState(() {
-        userName = fetchedUserName ?? 'Unknown User';
-        profileImageUrl = profilePicture ?? 'assets/profile_picture.jpg';
-      });
+      if (mounted) {
+        // ✅ Check before calling setState
+        setState(() {
+          userName = fetchedUserName ?? 'Unknown User';
+          profileImageUrl = profilePicture ?? 'assets/profile_picture.jpg';
+        });
+      }
     }
   }
 

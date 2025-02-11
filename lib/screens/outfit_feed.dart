@@ -38,6 +38,14 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
     return await _databaseService.getPublicPosts(widget.currentUser.uid!);
   }
 
+  Future<UserProfile?> fetchUserProfile(String uid) async {
+    UserProfile? userProfile = await _databaseService.getUserProfile(uid: uid);
+    if (userProfile != null) {
+      print("User found: ${userProfile.fullName}");
+    }
+    return userProfile;
+  }
+
   void _searchUsers(String query) async {
     if (query.isEmpty) {
       setState(() {
@@ -117,11 +125,27 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
                                 subtitle: Text(posts[index].description ??
                                     "No description"),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 15),
-                                child: PostWidget(
-                                    post: posts[index],
-                                    user: widget.currentUser),
+                              FutureBuilder<UserProfile?>(
+                                future: fetchUserProfile(posts[index].uid!),
+                                builder: (context, userSnapshot) {
+                                  if (userSnapshot.connectionState ==
+                                      ConnectionState.waiting) {
+                                    return const Center(
+                                        child: CircularProgressIndicator());
+                                  }
+                                  if (userSnapshot.hasError ||
+                                      userSnapshot.data == null) {
+                                    return const Text(
+                                        "User profile not found.");
+                                  }
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 15),
+                                    child: PostWidget(
+                                      post: posts[index],
+                                      user: userSnapshot.data!,
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           );
@@ -139,24 +163,35 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
     );
   }
 
-  /// **🔹 Search Results for Users**
-  Widget _buildSearchResults() {
-    return ListView.builder(
-      itemCount: _searchResults.length,
-      itemBuilder: (context, index) {
-        UserProfile user = _searchResults[index];
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundImage: NetworkImage(user.profilePictureUrl ??
-                "https://example.com/default-profile.png"),
-          ),
-          title: Text(user.fullName ?? "Unknown User"),
-          subtitle: Text("@${user.userName}"),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => SearchPage(searchType: "users"),
+  Widget _buildPostList({required bool isPublic}) {
+    return FutureBuilder<List<Post>>(
+      future: isPublic
+          ? _databaseService.getUserPublicPosts(widget.currentUser.uid!)
+          : _databaseService.getUserPrivatePosts(widget.currentUser.uid!),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Text(
+                "No posts found!",
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            ),
+          );
+        }
+        return ListView.builder(
+          shrinkWrap: true,
+          itemCount: snapshot.data!.length,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: PostWidget(
+                post: snapshot.data![index],
+                user: widget.currentUser,
               ),
             );
           },
@@ -165,58 +200,201 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
     );
   }
 
+  /// **🔹 Search Results for Users**
+  // Widget _buildSearchResults() {
+  //   return ListView.builder(
+  //     itemCount: _searchResults.length,
+  //     itemBuilder: (context, index) {
+  //       UserProfile user = _searchResults[index];
+  //       return ListTile(
+  //         leading: CircleAvatar(
+  //           backgroundImage: NetworkImage(user.profilePictureUrl ??
+  //               "https://example.com/default-profile.png"),
+  //         ),
+  //         title: Text(user.fullName ?? "Unknown User"),
+  //         subtitle: Text("@${user.userName}"),
+  //         onTap: () {
+  //           Navigator.push(
+  //             context,
+  //             MaterialPageRoute(
+  //               builder: (context) => SearchPage(searchType: "users"),
+  //             ),
+  //           );
+  //         },
+  //       );
+  //     },
+  //   );
+  // }
+  Widget _buildSearchResults() {
+    return ListView.builder(
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        UserProfile user = _searchResults[index];
+
+        return _buildUserTile(
+            user); // ✅ This should directly navigate to the profile
+      },
+    );
+  }
+
+  Widget _buildUserTile(UserProfile user) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: NetworkImage(user.profilePictureUrl ??
+            "https://example.com/default-profile.png"),
+      ),
+      title: Text(user.fullName ?? "Unknown User"),
+      subtitle: Text("@${user.userName}"),
+      onTap: () {
+        print("Navigating to profile of ${user.fullName}");
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProfilePage(
+              user: user,
+              currentUserId: user.uid!,
+              isOwnProfile: user.uid == _authService.user!.uid,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// **🔹 Drawer with User Info**
   Widget _buildDrawer() {
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          UserAccountsDrawerHeader(
-            accountName: Text(widget.currentUser.fullName ?? "Unknown User"),
-            accountEmail: Text("@${widget.currentUser.userName ?? "null"}"),
-            currentAccountPicture: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProfilePage(
-                      user: widget.currentUser,
-                      currentUserId: widget.currentUser.uid!,
-                      isOwnProfile:
-                          widget.currentUser.uid! == _authService.user!.uid,
+      child: DefaultTabController(
+        length: 2, // ✅ Two tabs: Public & Private
+        child: Column(
+          children: [
+            UserAccountsDrawerHeader(
+              accountName: Text(widget.currentUser.fullName ?? "Unknown User"),
+              accountEmail: Text("@${widget.currentUser.userName ?? "null"}"),
+              currentAccountPicture: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProfilePage(
+                        user: widget.currentUser,
+                        currentUserId: widget.currentUser.uid!,
+                        isOwnProfile:
+                            widget.currentUser.uid! == _authService.user!.uid,
+                      ),
                     ),
+                  );
+                },
+                child: CircleAvatar(
+                  backgroundImage: NetworkImage(
+                    widget.currentUser.profilePictureUrl ??
+                        "https://example.com/default-profile.png",
                   ),
-                );
-              },
-              child: CircleAvatar(
-                backgroundImage: NetworkImage(
-                  widget.currentUser.profilePictureUrl ??
-                      "https://example.com/default-profile.png",
+                ),
+              ),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.purpleAccent, Colors.deepPurple],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
             ),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.purpleAccent, Colors.deepPurple],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+
+            /// **✅ Use StreamBuilder to Show Live Following Count**
+            StreamBuilder<UserProfile?>(
+              stream: _databaseService
+                  .getUserProfileStream(widget.currentUser.uid!),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return ListTile(
+                    leading: Icon(Icons.people),
+                    title: Text("Following: ..."), // Loading state
+                  );
+                }
+                if (snapshot.hasError || snapshot.data == null) {
+                  return ListTile(
+                    leading: Icon(Icons.people),
+                    title: Text("Following: Error"),
+                  );
+                }
+                return ListTile(
+                  leading: Icon(Icons.people),
+                  title: Text(
+                      "Following: ${snapshot.data!.followingCount}"), // ✅ Updated count
+                );
+              },
+            ),
+
+            /// **✅ Use StreamBuilder to Show Live Followers Count**
+            StreamBuilder<UserProfile?>(
+              stream: _databaseService
+                  .getUserProfileStream(widget.currentUser.uid!),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return ListTile(
+                    leading: Icon(Icons.person),
+                    title: Text("Followers: ..."), // Loading state
+                  );
+                }
+                if (snapshot.hasError || snapshot.data == null) {
+                  return ListTile(
+                    leading: Icon(Icons.person),
+                    title: Text("Followers: Error"),
+                  );
+                }
+                return ListTile(
+                  leading: Icon(Icons.person),
+                  title: Text(
+                      "Followers: ${snapshot.data!.followersCount}"), // ✅ Updated count
+                );
+              },
+            ),
+
+            /// **✅ Use StreamBuilder to Show Live Post Count**
+            StreamBuilder<UserProfile?>(
+              stream: _databaseService
+                  .getUserProfileStream(widget.currentUser.uid!),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return ListTile(
+                    leading: Icon(Icons.post_add),
+                    title: Text("👗 Posts: ..."), // Loading state
+                  );
+                }
+                if (snapshot.hasError || snapshot.data == null) {
+                  return ListTile(
+                    leading: Icon(Icons.post_add),
+                    title: Text("👗 Posts: Error"),
+                  );
+                }
+                return ListTile(
+                  leading: Icon(Icons.post_add),
+                  title: Text(
+                      "👗 Posts: ${snapshot.data!.postCount}"), // ✅ Updated count
+                );
+              },
+            ),
+
+            const Divider(),
+
+            // ✅ Tab Bar for Public & Private Posts
+            TabBar(
+              tabs: [
+                Tab(icon: Icon(Icons.public), text: "👗"),
+                Tab(icon: Icon(Icons.lock), text: "👗"),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildPostList(isPublic: true), // ✅ Public Posts
+                  _buildPostList(isPublic: false), // ✅ Private Posts
+                ],
               ),
             ),
-          ),
-          ListTile(
-            leading: Icon(Icons.people),
-            title: Text("Following: ${widget.currentUser.followingCount}"),
-          ),
-          ListTile(
-            leading: Icon(Icons.person),
-            title: Text("Followers: ${widget.currentUser.followersCount}"),
-          ),
-          ListTile(
-            leading: Icon(Icons.post_add),
-            title: Text("Posts: ${widget.currentUser.postCount}"),
-          ),
-          const Divider(),
-        ],
+          ],
+        ),
       ),
     );
   }

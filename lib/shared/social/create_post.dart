@@ -20,6 +20,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final TextEditingController _descriptionController = TextEditingController();
   final GetIt _getIt = GetIt.instance;
   late DatabaseService _databaseService;
+  bool _isPublic = false; // 🔹 Toggle for Public/Private Post
 
   List<StyledOutfit> selectedOutfits = [];
   List<Cloth> selectedClothes = [];
@@ -80,6 +81,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       likes: [],
       comments: [],
       timestamp: DateTime.now(),
+      isPublic: _isPublic, // 🔹 Save visibility status
     );
 
     await _databaseService.addPost(newPost);
@@ -143,53 +145,84 @@ class _CreatePostPageState extends State<CreatePostPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Create New Post")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          children: [
-            TextField(
-              controller: _titleController,
-              decoration: InputDecoration(labelText: "Title"),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _descriptionController,
-              decoration: InputDecoration(labelText: "Description"),
-              maxLines: 4,
-            ),
-            const SizedBox(height: 10),
-            const Text("Select Clothes"),
-            SizedBox(
-              height: 120,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: availableClothes
-                      .map((cloth) => _buildItemBox(cloth, selectedClothes))
-                      .toList(),
+      appBar: AppBar(
+        title: Text("Create New Post"),
+        actions: [
+          Row(
+            children: [
+              Text(
+                _isPublic ? "Public" : "Private",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Switch(
+                value: _isPublic,
+                onChanged: (value) {
+                  setState(() {
+                    _isPublic = value;
+                  });
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+      resizeToAvoidBottomInset: true, // ✅ Prevents keyboard overlap
+      body: GestureDetector(
+        onTap: () =>
+            FocusScope.of(context).unfocus(), // ✅ Dismiss keyboard on tap
+        child: SingleChildScrollView(
+          // ✅ Allows scrolling when keyboard is open
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _titleController,
+                decoration: InputDecoration(labelText: "Title"),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _descriptionController,
+                decoration: InputDecoration(labelText: "Description"),
+                maxLines: 4,
+              ),
+              const SizedBox(height: 10),
+              const Text("Select Clothes"),
+              SizedBox(
+                height: 120,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: availableClothes
+                        .map((cloth) => _buildItemBox(cloth, selectedClothes))
+                        .toList(),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            const Text("Select Outfits"),
-            SizedBox(
-              height: 120,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: availableOutfits
-                      .map((outfit) => _buildItemBox(outfit, selectedOutfits))
-                      .toList(),
+              const SizedBox(height: 10),
+              const Text("Select Outfits"),
+              SizedBox(
+                height: 120,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: availableOutfits
+                        .map((outfit) => _buildItemBox(outfit, selectedOutfits))
+                        .toList(),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _submitPost,
-              child: Text("Post"),
-            ),
-          ],
+              const SizedBox(height: 20),
+              Align(
+                alignment:
+                    Alignment.center, // ✅ Ensures button is always visible
+                child: ElevatedButton(
+                  onPressed: _submitPost,
+                  child: Text("Post"),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -6,8 +6,9 @@ class UserProfile {
   int followingCount;
   int followersCount;
   int postCount;
-  List<String> following; // ✅ New Field
-  List<String> followers; // ✅ New Field
+  List<String> following;
+  List<String> followers;
+  List<String> posts; // ✅ List to store post IDs
 
   UserProfile({
     required this.uid,
@@ -17,8 +18,9 @@ class UserProfile {
     this.followingCount = 0,
     this.followersCount = 0,
     this.postCount = 0,
-    this.following = const [], // ✅ Initialize empty list
-    this.followers = const [], // ✅ Initialize empty list
+    this.following = const [],
+    this.followers = const [],
+    this.posts = const [], // ✅ Initialize empty list
   });
 
   UserProfile.fromJson(Map<String, dynamic> json)
@@ -29,9 +31,9 @@ class UserProfile {
         followingCount = json['followingCount'] ?? 0,
         followersCount = json['followersCount'] ?? 0,
         postCount = json['postCount'] ?? 0,
-        following =
-            List<String>.from(json['following'] ?? []), // ✅ Convert List
-        followers = List<String>.from(json['followers'] ?? []);
+        following = List<String>.from(json['following'] ?? []),
+        followers = List<String>.from(json['followers'] ?? []),
+        posts = List<String>.from(json['posts'] ?? []); // ✅ Convert posts
 
   Map<String, dynamic> toJson() {
     return {
@@ -42,8 +44,9 @@ class UserProfile {
       'followingCount': followingCount,
       'followersCount': followersCount,
       'postCount': postCount,
-      'following': following, // ✅ Save following list
-      'followers': followers, // ✅ Save followers list
+      'following': following,
+      'followers': followers,
+      'posts': posts, // ✅ Save posts list
     };
   }
 }

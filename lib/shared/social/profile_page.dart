@@ -25,12 +25,38 @@ class _ProfilePageState extends State<ProfilePage> {
   late Future<List<Post>> _userPosts;
   final GetIt _getIt = GetIt.instance;
   late DatabaseService _databaseService;
+  bool _isFollowing = false;
+  late UserProfile _userProfile; // ✅ Local state variable
+
+  void _toggleFollow() async {
+    await _databaseService.followUser(widget.currentUserId, _userProfile.uid!);
+
+    // Fetch updated user profile
+    UserProfile? updatedUser =
+        await _databaseService.getUserProfile(uid: _userProfile.uid!);
+
+    if (updatedUser != null) {
+      setState(() {
+        _isFollowing = !_isFollowing;
+        _userProfile = updatedUser; // ✅ Update UI with new data
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _databaseService = _getIt.get<DatabaseService>();
-    _userPosts = _databaseService.getUserPosts(widget.user.uid!);
+    _userProfile = widget.user; // ✅ Store _userProfile in a mutable variable
+    if (widget.isOwnProfile) {
+      _userPosts = _databaseService.getUserPosts(_userProfile.uid!);
+    } else {
+      _userPosts = _databaseService.getUserPublicPosts(_userProfile.uid!);
+    }
+  }
+
+  Stream<UserProfile?> _fetchUserProfile() {
+    return _databaseService.getUserProfileStream(_userProfile.uid!);
   }
 
   void _editProfile() {
@@ -70,20 +96,20 @@ class _ProfilePageState extends State<ProfilePage> {
                   CircleAvatar(
                     radius: 50,
                     backgroundImage: NetworkImage(
-                      widget.user.profilePictureUrl ??
+                      _userProfile.profilePictureUrl ??
                           "https://example.com/default-profile.png",
                     ),
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    widget.user.fullName ?? "Unknown User",
+                    _userProfile.fullName ?? "Unknown User",
                     style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.white),
                   ),
                   Text(
-                    "@${widget.user.userName}",
+                    "@${_userProfile.userName}",
                     style: const TextStyle(
                         fontSize: 16,
                         color: Colors.white70,
@@ -93,41 +119,78 @@ class _ProfilePageState extends State<ProfilePage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _infoBox("Following", widget.user.followingCount),
+                      StreamBuilder<UserProfile?>(
+                        stream: _fetchUserProfile(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return _infoBox(
+                                "Following", snapshot.data!.followingCount);
+                          }
+                          return _infoBox(
+                              "Following", _userProfile.followingCount);
+                        },
+                      ),
                       const SizedBox(width: 20),
-                      _infoBox("Followers", widget.user.followersCount),
+                      StreamBuilder<UserProfile?>(
+                        stream: _fetchUserProfile(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return _infoBox(
+                                "Followers", snapshot.data!.followersCount);
+                          }
+                          return _infoBox(
+                              "Followers", _userProfile.followersCount);
+                        },
+                      ),
                       const SizedBox(width: 20),
-                      _infoBox("Posts", widget.user.postCount),
+                      StreamBuilder<UserProfile?>(
+                        stream: _fetchUserProfile(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return _infoBox("Posts", snapshot.data!.postCount);
+                          }
+                          return _infoBox("Posts", _userProfile.postCount);
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
 
                   // ✅ Show "Edit Profile" for self
-                  if (widget.isOwnProfile)
-                    ElevatedButton(
-                      onPressed: _editProfile,
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white),
-                      child: const Text("Edit Profile",
-                          style: TextStyle(color: Colors.black)),
-                    ),
+                  widget.isOwnProfile
+                      ? ElevatedButton(
+                          onPressed: _editProfile,
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white),
+                          child: const Text("Edit Profile",
+                              style: TextStyle(color: Colors.black)),
+                        )
+                      : ElevatedButton(
+                          onPressed: _toggleFollow,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                _isFollowing ? Colors.red : Colors.blue,
+                          ),
+                          child: Text(
+                            _isFollowing ? "Unfollow" : "Follow",
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 20),
-
             // ✅ Shared Posts Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min, // ✅ Prevent unnecessary space
                 children: [
                   const Text(
-                    "Shared Posts",
+                    "Shared Posts", // ✅ Null-safe
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 1),
                   FutureBuilder<List<Post>>(
                     future: _userPosts,
                     builder: (context, snapshot) {
@@ -139,7 +202,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           snapshot.data!.isEmpty) {
                         return const Center(
                           child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20),
+                            padding: EdgeInsets.symmetric(vertical: 10),
                             child: Text(
                               "No posts shared yet!",
                               style:
@@ -151,12 +214,14 @@ class _ProfilePageState extends State<ProfilePage> {
                       return ListView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
+                        padding: EdgeInsets.zero, // ✅ Remove any extra spacing
                         itemCount: snapshot.data!.length,
                         itemBuilder: (context, index) {
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 15),
+                            padding: const EdgeInsets.only(bottom: 2),
                             child: PostWidget(
-                                post: snapshot.data![index], user: widget.user),
+                                post: snapshot.data![index],
+                                user: _userProfile),
                           );
                         },
                       );

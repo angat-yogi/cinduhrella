@@ -394,48 +394,6 @@ class DatabaseService {
     }
   }
 
-  // Future<void> updateTask(
-  //     String userId, String taskId, CustomTask updatedTask) async {
-  //   final taskRef =
-  //       _firebaseFirestore.collection('users/$userId/tasks').doc(taskId);
-  //   final goalRef = _firebaseFirestore
-  //       .collection('users/$userId/goals')
-  //       .doc(updatedTask.goalId);
-
-  //   await _firebaseFirestore.runTransaction((transaction) async {
-  //     // Perform the read for the task
-  //     final taskSnapshot = await transaction.get(taskRef);
-  //     if (!taskSnapshot.exists) {
-  //       throw Exception("Task does not exist!");
-  //     }
-
-  //     // Read the goal data if associated
-  //     int totalTasks = 0;
-  //     int completedTasks = 0;
-
-  //     if (updatedTask.goalId != null) {
-  //       final goalTasksQuery = _firebaseFirestore
-  //           .collection('users/$userId/tasks')
-  //           .where('goalId', isEqualTo: updatedTask.goalId);
-  //       final goalTasksSnapshot = await goalTasksQuery.get();
-
-  //       totalTasks = goalTasksSnapshot.docs.length;
-  //       completedTasks = goalTasksSnapshot.docs
-  //           .where((doc) => (doc.data()['completed'] ?? false) as bool)
-  //           .length;
-  //     }
-
-  //     // Calculate the new progress
-  //     final progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-
-  //     // Perform all writes
-  //     transaction.update(taskRef, updatedTask.toJson());
-  //     if (updatedTask.goalId != null) {
-  //       transaction.update(goalRef, {'progress': progress});
-  //     }
-  //   });
-  // }
-
   Future<void> updateTask(
       String userId, String taskId, CustomTask updatedTask) async {
     final taskRef =
@@ -912,6 +870,17 @@ class DatabaseService {
     });
   }
 
+  Stream<UserProfile?> getUserProfileStream(String uid) {
+    return _firebaseFirestore.collection('users').doc(uid).snapshots().map(
+      (snapshot) {
+        if (snapshot.exists) {
+          return UserProfile.fromJson(snapshot.data() as Map<String, dynamic>);
+        }
+        return null;
+      },
+    );
+  }
+
   Future<List<Post>> getAllPublicPosts() async {
     try {
       QuerySnapshot snapshot = await _firebaseFirestore
@@ -961,12 +930,58 @@ class DatabaseService {
 
   Future<void> addPost(Post post) async {
     try {
-      await _firebaseFirestore
-          .collection('posts')
-          .doc(post.postId)
-          .set(post.toJson());
+      DocumentReference postRef =
+          _firebaseFirestore.collection('posts').doc(post.postId);
+      await postRef.set(post.toJson());
+
+      DocumentReference userRef =
+          _firebaseFirestore.collection('users').doc(post.uid);
+
+      await _firebaseFirestore.runTransaction((transaction) async {
+        DocumentSnapshot userDoc = await transaction.get(userRef);
+        if (!userDoc.exists) {
+          throw Exception("User document does not exist.");
+        }
+
+        Map<String, dynamic>? userData =
+            userDoc.data() as Map<String, dynamic>?;
+        List<dynamic> postsArray = userData?['posts'] ?? [];
+        int postCount = userData?['postCount'] ?? 0;
+
+        print(
+            "🔥 Firestore BEFORE update: posts.length = ${postsArray.length}, postCount = $postCount");
+
+        // ✅ Ensure we only add if it's not already there
+        if (postsArray.contains(post.postId)) {
+          print("⚠️ Post already exists in Firestore. Skipping duplicate add.");
+          return;
+        }
+
+        List<dynamic> updatedPostsArray = List.from(postsArray);
+        updatedPostsArray.add(post.postId);
+
+        int correctPostCount = updatedPostsArray.length;
+
+        transaction.update(userRef, {
+          'posts': updatedPostsArray, // ✅ Update full posts array
+          'postCount': correctPostCount, // ✅ Set postCount to exact length
+        });
+
+        print(
+            "✅ Firestore AFTER update: posts.length = ${updatedPostsArray.length}, postCount should be = $correctPostCount");
+      });
+
+      // ✅ Fetch and print Firestore data again to verify
+      DocumentSnapshot finalSnapshot = await userRef.get();
+      List<dynamic> finalPosts =
+          (finalSnapshot.data() as Map<String, dynamic>)['posts'] ?? [];
+      int finalPostCount =
+          (finalSnapshot.data() as Map<String, dynamic>)['postCount'] ?? 0;
+
+      print(
+          "🔍 Firestore FINAL: posts.length = ${finalPosts.length}, postCount = $finalPostCount");
     } catch (e) {
-      print("Error adding post: $e");
+      print("❌ Error adding post: $e");
     }
   }
 
@@ -985,6 +1000,44 @@ class DatabaseService {
           .toList();
     } catch (e) {
       print("Error searching users: $e");
+      return [];
+    }
+  }
+
+  Future<List<Post>> getUserPublicPosts(String userId) async {
+    print("$userId is trying to fetch public posts");
+    try {
+      QuerySnapshot snapshot = await _firebaseFirestore
+          .collection('posts')
+          .where("uid", isEqualTo: userId)
+          .where("isPublic", isEqualTo: true) // ✅ Only Public Posts
+          .orderBy("timestamp", descending: true)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => Post.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print("Error fetching public posts: $e");
+      return [];
+    }
+  }
+
+  Future<List<Post>> getUserPrivatePosts(String userId) async {
+    print("$userId is trying to fetch private posts");
+    try {
+      QuerySnapshot snapshot = await _firebaseFirestore
+          .collection('posts')
+          .where("uid", isEqualTo: userId)
+          .where("isPublic", isEqualTo: false) // ✅ Only Private Posts
+          .orderBy("timestamp", descending: true)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => Post.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print("Error fetching private posts: $e");
       return [];
     }
   }
