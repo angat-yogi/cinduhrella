@@ -69,50 +69,6 @@ class _StylePageState extends State<StylePage> {
     });
   }
 
-  // Future<void> saveStyledOutfit() async {
-  //   if (selectedItems.isEmpty) {
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       const SnackBar(content: Text("Select items before saving!")),
-  //     );
-  //     return;
-  //   }
-
-  //   try {
-  //     List<Cloth> clothes = selectedItems.map((item) {
-  //       return Cloth(
-  //         clothId: item['id'],
-  //         storageId: item['storageId'],
-  //         uid: widget.userId,
-  //         imageUrl: item['imageUrl'],
-  //         brand: item['brand'],
-  //         size: item['size'],
-  //         description: item['description'],
-  //         type: item['type'],
-  //         color: item['color'],
-  //       );
-  //     }).toList();
-
-  //     StyledOutfit outfit = StyledOutfit(
-  //       uid: widget.userId,
-  //       clothes: clothes,
-  //       createdAt: Timestamp.now(),
-  //     );
-
-  //     String path = 'users/${widget.userId}/styledOutfits';
-  //     await firestore.collection(path).add(outfit.toJson());
-
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       const SnackBar(content: Text("Outfit saved successfully!")),
-  //     );
-
-  //     setState(() {
-  //       selectedItems.clear();
-  //     });
-  //   } catch (e) {
-  //     print("Error saving styled outfit: $e");
-  //   }
-  // }
-
   Future<void> saveStyledOutfit() async {
     if (selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -287,8 +243,6 @@ class _StylePageState extends State<StylePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Style Your Clothes"),
-        backgroundColor: Colors.blue,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

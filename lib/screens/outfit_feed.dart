@@ -200,31 +200,6 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
     );
   }
 
-  /// **🔹 Search Results for Users**
-  // Widget _buildSearchResults() {
-  //   return ListView.builder(
-  //     itemCount: _searchResults.length,
-  //     itemBuilder: (context, index) {
-  //       UserProfile user = _searchResults[index];
-  //       return ListTile(
-  //         leading: CircleAvatar(
-  //           backgroundImage: NetworkImage(user.profilePictureUrl ??
-  //               "https://example.com/default-profile.png"),
-  //         ),
-  //         title: Text(user.fullName ?? "Unknown User"),
-  //         subtitle: Text("@${user.userName}"),
-  //         onTap: () {
-  //           Navigator.push(
-  //             context,
-  //             MaterialPageRoute(
-  //               builder: (context) => SearchPage(searchType: "users"),
-  //             ),
-  //           );
-  //         },
-  //       );
-  //     },
-  //   );
-  // }
   Widget _buildSearchResults() {
     return ListView.builder(
       itemCount: _searchResults.length,

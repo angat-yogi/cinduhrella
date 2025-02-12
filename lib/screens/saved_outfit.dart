@@ -149,8 +149,6 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-          title: const Text("Saved Outfits"), backgroundColor: Colors.blue),
       body: StreamBuilder<QuerySnapshot>(
         stream: firestore
             .collection('users/${widget.userId}/styledOutfits')

@@ -20,7 +20,17 @@ class Cloth {
     this.type,
     this.color,
   });
-
+  Cloth.empty()
+      : clothId = null,
+        storageId = null,
+        uid = null,
+        imageUrl =
+            "https://res.cloudinary.com/hamstech/images/w_440,h_660/f_auto,q_auto/v1628494598/Hamstech%20App/Culottes/Culottes.jpg?_i=AA",
+        type = null,
+        brand = null,
+        size = null,
+        description = null,
+        color = null;
   // Named constructor to initialize a Cloth instance from a JSON object
   Cloth.fromJson(Map<String, dynamic> json) {
     clothId = json['clothId'];

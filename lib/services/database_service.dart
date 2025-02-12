@@ -433,21 +433,6 @@ class DatabaseService {
     });
   }
 
-  // Future<List<StyledOutfit>> fetchStyledOutfits(String userId) async {
-  //   try {
-  //     QuerySnapshot snapshot = await _firebaseFirestore
-  //         .collection('users/$userId/styledOutfits')
-  //         .get();
-
-  //     return snapshot.docs.map((doc) {
-  //       return StyledOutfit.fromFirestore(doc);
-  //     }).toList();
-  //   } catch (e) {
-  //     print("Error fetching outfits: $e");
-  //     return [];
-  //   }
-  // }
-
   // Update outfit like status
   Future<void> updateOutfitLikeStatus(
       String userId, String outfitId, bool liked) async {
