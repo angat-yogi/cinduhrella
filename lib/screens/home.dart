@@ -314,7 +314,6 @@ class _HomePageState extends State<HomePage> {
   late final List<Widget> _widgetOptions = [
     _buildHomePage(),
     StylePage(userId: _authService.user!.uid),
-    SavedOutfitsPage(userId: _authService.user!.uid),
     TripPage(userId: _authService.user!.uid),
     FutureBuilder<UserProfile>(
       future: _getUserProfileInformation(_authService.user!.uid),
@@ -347,14 +346,14 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _selectedIndex == 4
+      appBar: _selectedIndex == 3
           ? null
           : CustomAppBar(
               userName: userName,
               profileImageUrl: profileImageUrl,
               searchHint: searchHint,
             ),
-      drawer: _selectedIndex == 4
+      drawer: _selectedIndex == 3
           ? null
           : AppDrawer(userName: userName, profileImageUrl: profileImageUrl),
       body: IndexedStack(
@@ -375,7 +374,6 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
               icon: Icon(Icons.shopping_bag), label: 'Style'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Outfits'),
           BottomNavigationBarItem(
               icon: Stack(
                 alignment: Alignment.center,
