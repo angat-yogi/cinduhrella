@@ -2,6 +2,7 @@ import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/models/styled_outfit.dart';
 import 'package:cinduhrella/models/trip.dart';
 import 'package:cinduhrella/screens/trip_detail.dart';
+import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/shared/image_picker_dialog.dart';
 import 'package:cinduhrella/shared/roadmap.dart';
@@ -428,9 +429,8 @@ class _TripPageState extends State<TripPage> {
 
   Future<void> _saveTrip() async {
     if (tripNameController.text.isEmpty || fromDate == null || toDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill all required fields.")),
-      );
+      AlertService().showToast(
+          text: "Please fill all required fields!", icon: Icons.error);
       return;
     }
 
@@ -449,9 +449,7 @@ class _TripPageState extends State<TripPage> {
     //     .collection('users/${widget.userId}/trips')
     //     .add(newTrip.toJson());
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Trip added successfully!")),
-    );
+    AlertService().showToast(text: "Trip added Successfully", icon: Icons.done);
 
     Navigator.pop(context);
 

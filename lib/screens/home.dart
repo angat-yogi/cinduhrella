@@ -8,6 +8,7 @@ import 'package:cinduhrella/screens/rooms_page.dart';
 import 'package:cinduhrella/screens/saved_outfit.dart';
 import 'package:cinduhrella/screens/style_page.dart';
 import 'package:cinduhrella/screens/trip_page.dart';
+import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/shared/add_item.dart';
@@ -34,6 +35,7 @@ class _HomePageState extends State<HomePage> {
   final GetIt _getIt = GetIt.instance;
   late AuthService _authService;
   late DatabaseService _databaseService;
+  late AlertService _alertService;
   int _selectedIndex = 0;
   final List<String> _commonSearches = [
     "Black T-shirt",
@@ -56,6 +58,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _authService = _getIt.get<AuthService>();
     _databaseService = _getIt.get<DatabaseService>();
+    _alertService = _getIt.get<AlertService>();
     _fetchProfileDetails();
     _startHintRotation(); // ✅ Start rotating search hints
   }
@@ -103,89 +106,118 @@ class _HomePageState extends State<HomePage> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Add New Room'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: roomNameController,
-                    decoration: const InputDecoration(labelText: 'Room Name'),
-                  ),
-                  const SizedBox(height: 16),
-                  imageUrl != null
-                      ? Image.network(
-                          imageUrl!, // Display the uploaded image
-                          width: 150,
-                          height: 150,
-                          fit: BoxFit.cover,
-                        )
-                      : const SizedBox.shrink(),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) {
-                          return ImagePickerDialog(
-                            userId: userId,
-                            pathType: 'room',
-                            onImagePicked: (String uploadedImageUrl) {
-                              setState(() {
-                                imageUrl =
-                                    uploadedImageUrl; // Store Firebase Storage URL
-                              });
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.0),
+              ),
+              child: SingleChildScrollView(
+                // ✅ Allows scrolling when keyboard appears
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context)
+                      .viewInsets
+                      .bottom, // ✅ Adjust for keyboard
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Add New Room',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: roomNameController,
+                        decoration:
+                            const InputDecoration(labelText: 'Room Name'),
+                      ),
+                      const SizedBox(height: 16),
+                      imageUrl != null
+                          ? Image.network(
+                              imageUrl!, // Display the uploaded image
+                              width: 150,
+                              height: 150,
+                              fit: BoxFit.cover,
+                            )
+                          : const SizedBox.shrink(),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              return ImagePickerDialog(
+                                userId: userId,
+                                pathType: 'room',
+                                onImagePicked: (String uploadedImageUrl) {
+                                  setState(() {
+                                    imageUrl =
+                                        uploadedImageUrl; // Store Firebase Storage URL
+                                  });
+                                },
+                              );
                             },
                           );
                         },
-                      );
-                    },
-                    child: const Text('Pick Image'),
+                        child: const Text('Pick Image'),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final roomName = roomNameController.text.trim();
+
+                              if (roomName.isEmpty) {
+                                _alertService.showToast(
+                                    text: "Room name is required",
+                                    icon: Icons.check_box_rounded);
+
+                                return;
+                              }
+
+                              if (imageUrl == null) {
+                                _alertService.showToast(
+                                    text: "Image is required",
+                                    icon: Icons.error);
+                                return;
+                              }
+
+                              try {
+                                await firestore
+                                    .collection('users/$userId/rooms')
+                                    .add({
+                                  'roomName': roomName,
+                                  'imageUrl': imageUrl,
+                                });
+
+                                // ✅ Ensure the dialog is closed properly after Firestore update
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              } catch (e) {
+                                _alertService.showToast(
+                                    text: "Failed to add room",
+                                    icon: Icons.error);
+                              }
+                            },
+                            child: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    final roomName = roomNameController.text.trim();
-
-                    if (roomName.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Room name cannot be empty!'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-
-                    if (imageUrl == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please select an image!'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-
-                    // Save room details to Firestore with Firebase Storage URL
-                    await firestore.collection('users/$userId/rooms').add({
-                      'roomName': roomName,
-                      'imageUrl': imageUrl, // Store Firebase Storage URL
-                    });
-
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Add'),
-                ),
-              ],
             );
           },
         );

@@ -1,6 +1,11 @@
+import 'package:cinduhrella/screens/storage_page.dart';
+import 'package:cinduhrella/services/alert_service.dart';
+import 'package:cinduhrella/services/database_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:get_it/get_it.dart';
 
 class ItemPage extends StatefulWidget {
   final String itemId;
@@ -21,6 +26,9 @@ class ItemPage extends StatefulWidget {
 class ItemPageState extends State<ItemPage> {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final String userId = FirebaseAuth.instance.currentUser!.uid;
+  final GetIt _getIt = GetIt.instance;
+  late DatabaseService _databaseService;
+  late AlertService _alertService;
 
   bool isEditing = false;
   Map<String, dynamic>? itemData;
@@ -54,6 +62,8 @@ class ItemPageState extends State<ItemPage> {
   @override
   void initState() {
     super.initState();
+    _databaseService = _getIt.get<DatabaseService>();
+    _alertService = _getIt.get<AlertService>();
     _loadItemData();
   }
 
@@ -93,12 +103,24 @@ class ItemPageState extends State<ItemPage> {
       isEditing = false;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Item updated successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    _alertService.showToast(
+        text: "Item updated successfully!", icon: Icons.check_box_rounded);
+
+    String? storageName = await _databaseService.getStorageName(
+        userId, widget.roomId, widget.storageId);
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => StoragePage(
+            storageId: widget.storageId,
+            storageName: storageName ?? "Unknown Storage", // Fallback name
+            roomId: widget.roomId,
+          ),
+        ),
+      );
+    }
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'package:cinduhrella/firebase_options.dart';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
+import 'package:cinduhrella/services/chat_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/services/media_service.dart';
 import 'package:cinduhrella/services/navigation_service.dart';
@@ -32,5 +33,8 @@ Future<void> registerServices() async {
   getIt.registerSingleton<DatabaseService>(
     DatabaseService(),
   );
-  //getIt.registerSingleton<ChatService>(ChatService(),);
+
+  getIt.registerSingleton<ChatService>(
+    ChatService(),
+  );
 }

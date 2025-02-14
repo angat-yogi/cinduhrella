@@ -1026,4 +1026,22 @@ class DatabaseService {
       return [];
     }
   }
+
+  Future<String?> getStorageName(
+      String userId, String roomId, String storageId) async {
+    try {
+      DocumentSnapshot storageDoc = await _firebaseFirestore
+          .collection('users/$userId/rooms/$roomId/storages')
+          .doc(storageId)
+          .get();
+
+      if (storageDoc.exists) {
+        return storageDoc['storageName'] as String?;
+      }
+      return null;
+    } catch (e) {
+      print("Error fetching storage name: $e");
+      return null;
+    }
+  }
 }

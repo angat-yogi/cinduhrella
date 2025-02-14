@@ -114,21 +114,28 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Widget _buildUI() {
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 20.0),
-        child: Column(
-          children: [
-            _headerText(),
-            if (!isLoading) _registrationForm(),
-            if (!isLoading) _loginAccountLink(),
-            if (isLoading)
-              const Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 15.0, vertical: 20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _headerText(),
+                    _registrationForm(),
+                    _loginAccountLink(),
+                  ],
                 ),
-              )
-          ],
-        ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -239,11 +246,10 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _loginAccountLink() {
-    return Expanded(
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
       child: Row(
-        mainAxisSize: MainAxisSize.max,
         mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           const Text("Already have an account? "),
           GestureDetector(

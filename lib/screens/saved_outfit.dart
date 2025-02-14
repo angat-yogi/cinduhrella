@@ -1,4 +1,5 @@
 import 'package:cinduhrella/models/styled_outfit.dart';
+import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -92,9 +93,8 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
         }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Outfit name updated!")),
-      );
+      AlertService().showToast(
+          text: "Outfit name updated!", icon: Icons.check_box_rounded);
     } catch (e) {
       print("Error updating outfit name: $e");
     }

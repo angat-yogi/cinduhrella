@@ -13,8 +13,11 @@ class StorageService {
 
   Future<String?> uploadImages(
       {required File file, required String uid}) async {
+    // Reference fileRef = _firebaseStorage
+    //     .ref('users/profile_pictures')
+    //     .child('$uid${path.extension(file.path)}');
     Reference fileRef = _firebaseStorage
-        .ref('users/profile_pictures')
+        .ref('users/$uid/profile_picture') // ✅ Correct path
         .child('$uid${path.extension(file.path)}');
     UploadTask task = fileRef.putFile(file);
     return task.then((p) {

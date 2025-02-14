@@ -1,5 +1,6 @@
 import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/models/styled_outfit.dart';
+import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -71,9 +72,8 @@ class _StylePageState extends State<StylePage> {
 
   Future<void> saveStyledOutfit() async {
     if (selectedItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Select items before saving!")),
-      );
+      AlertService().showToast(
+          text: "Please select at least one item", icon: Icons.error);
       return;
     }
 
@@ -113,37 +113,40 @@ class _StylePageState extends State<StylePage> {
       // ✅ Use `.set()` with generated ID instead of `.add()`
       await newOutfitRef.set(outfit.toJson());
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Outfit saved successfully!")),
-      );
+      AlertService().showToast(
+          text: "Outfit Saved Successfully", icon: Icons.check_circle_outline);
 
       setState(() {
         selectedItems.clear();
       });
     } catch (e) {
       print("Error saving styled outfit: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error saving outfit: ${e.toString()}")),
-      );
+      AlertService().showToast(
+          text: "Error saving styled outfit, refresh the page",
+          icon: Icons.check_circle_outline);
     }
   }
 
-  Widget buildClothesColumn(List<Map<String, dynamic>> items, String category) {
+  Widget buildClothesColumn(List<Map<String, dynamic>> items, String category,
+      {EdgeInsets? padding}) {
     return Expanded(
       child: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
+          : ListView.separated(
+              padding: padding,
+              separatorBuilder: (context, index) =>
+                  const Divider(color: Colors.grey, thickness: 1),
               itemCount: items.length,
               itemBuilder: (context, index) {
                 var item = items[index];
                 return GestureDetector(
                   onTap: () => toggleItem(item),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20), // ✅ Rounded edges
                     child: CachedNetworkImage(
                       imageUrl: item['imageUrl'],
-                      width: 80,
-                      height: 100,
+                      width: 100,
+                      height: 120,
                       fit: BoxFit.cover,
                       placeholder: (context, url) =>
                           const CircularProgressIndicator(),
@@ -162,19 +165,21 @@ class _StylePageState extends State<StylePage> {
       height: 100,
       child: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
+          : ListView.separated(
               scrollDirection: Axis.horizontal,
+              separatorBuilder: (context, index) =>
+                  const VerticalDivider(color: Colors.grey, thickness: 1),
               itemCount: accessories.length,
               itemBuilder: (context, index) {
                 var item = accessories[index];
                 return GestureDetector(
                   onTap: () => toggleItem(item),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20), // ✅ Rounded edges
                     child: CachedNetworkImage(
                       imageUrl: item['imageUrl'],
-                      width: 80,
-                      height: 80,
+                      width: 100,
+                      height: 100,
                       fit: BoxFit.cover,
                       placeholder: (context, url) =>
                           const CircularProgressIndicator(),
@@ -190,7 +195,7 @@ class _StylePageState extends State<StylePage> {
 
   Widget buildStyleBoard() {
     return Container(
-      height: 250,
+      height: 320,
       width: double.infinity,
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey),
@@ -256,13 +261,14 @@ class _StylePageState extends State<StylePage> {
             child: Row(
               children: [
                 // Bottom Wear (Left)
-                buildClothesColumn(bottomWear, 'bottomWear'),
+                buildClothesColumn(bottomWear, 'bottomWear',
+                    padding: const EdgeInsets.only(left: 7)),
 
                 // Middle Playground
                 Expanded(
-                  flex: 2,
+                  flex: 3,
                   child: Padding(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(7),
                     child: Column(
                       children: [
                         const Text("Style Playground",
@@ -281,7 +287,8 @@ class _StylePageState extends State<StylePage> {
                 ),
 
                 // Top Wear (Right)
-                buildClothesColumn(topWear, 'topWear'),
+                buildClothesColumn(topWear, 'topWear',
+                    padding: const EdgeInsets.only(right: 7)),
               ],
             ),
           ),

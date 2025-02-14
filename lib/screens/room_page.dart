@@ -1,7 +1,9 @@
+import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/shared/image_picker_dialog.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'storage_page.dart';
 
 class RoomPage extends StatelessWidget {
@@ -120,81 +122,117 @@ class RoomPage extends StatelessWidget {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Add New Storage'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: storageNameController,
-                    decoration:
-                        const InputDecoration(labelText: 'Storage Name'),
-                  ),
-                  const SizedBox(height: 16),
-                  imageUrl != null
-                      ? Image.network(
-                          imageUrl!,
-                          width: 150,
-                          height: 150,
-                          fit: BoxFit.cover,
-                        )
-                      : const SizedBox.shrink(),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) {
-                          return ImagePickerDialog(
-                            userId: userId,
-                            pathType: 'storage',
-                            roomId: roomId, // Required for storage images
-                            onImagePicked: (String uploadedImageUrl) {
-                              setState(() {
-                                imageUrl = uploadedImageUrl;
-                              });
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.0),
+              ),
+              child: SingleChildScrollView(
+                // ✅ Allows scrolling when keyboard appears
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context)
+                      .viewInsets
+                      .bottom, // ✅ Adjusts for keyboard
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Add New Storage',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: storageNameController,
+                        decoration:
+                            const InputDecoration(labelText: 'Storage Name'),
+                      ),
+                      const SizedBox(height: 16),
+                      imageUrl != null
+                          ? Image.network(
+                              imageUrl!,
+                              width: 150,
+                              height: 150,
+                              fit: BoxFit.cover,
+                            )
+                          : const SizedBox.shrink(),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              return ImagePickerDialog(
+                                userId: userId,
+                                pathType: 'storage',
+                                roomId: roomId, // Required for storage images
+                                onImagePicked: (String uploadedImageUrl) {
+                                  setState(() {
+                                    imageUrl = uploadedImageUrl;
+                                  });
+                                },
+                              );
                             },
                           );
                         },
-                      );
-                    },
-                    child: const Text('Pick Image'),
+                        child: const Text('Pick Image'),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final storageName =
+                                  storageNameController.text.trim();
+
+                              if (storageName.isEmpty || imageUrl == null) {
+                                AlertService().showToast(
+                                    text: "Name and Image are required!",
+                                    icon: Icons.error);
+                                return;
+                              }
+
+                              try {
+                                await firestore
+                                    .collection(
+                                        'users/$userId/rooms/$roomId/storages')
+                                    .add({
+                                  'storageName': storageName,
+                                  'imageUrl': imageUrl,
+                                });
+
+                                // ✅ Ensure the dialog closes properly after saving
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              } catch (e) {
+                                print("Error adding storage: $e");
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Error adding storage. Please try again!'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            },
+                            child: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    final storageName = storageNameController.text.trim();
-
-                    if (storageName.isEmpty || imageUrl == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Storage name and image are required!'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-
-                    await firestore
-                        .collection('users/$userId/rooms/$roomId/storages')
-                        .add({
-                      'storageName': storageName,
-                      'imageUrl': imageUrl,
-                    });
-
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Add'),
-                ),
-              ],
             );
           },
         );
