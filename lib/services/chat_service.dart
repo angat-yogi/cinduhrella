@@ -80,7 +80,7 @@ class ChatService {
           {
             "role": "system",
             "content": """
-            You are a fashion AI assistant. Identify clothing details (type, brand, color, size) from images.
+            You are a fashion AI assistant. Identify clothing details (type, brand, color, size) from images. Everything must be only from the available option.
             Select the **best matching values** from these predefined lists:
 
             - **Type:** ${types.join(", ")}
