@@ -1,4 +1,5 @@
 import 'package:cinduhrella/models/user_profile.dart';
+import 'package:cinduhrella/shared/profile_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:cinduhrella/models/social/post.dart';
 
@@ -22,9 +23,8 @@ class PostWidget extends StatelessWidget {
             // User Info
             Row(
               children: [
-                CircleAvatar(
-                  backgroundImage: NetworkImage(user.profilePictureUrl ??
-                      'https://example.com/default-profile.png'),
+                ProfileAvatar(
+                  imageUrl: user.profilePictureUrl,
                   radius: 25,
                 ),
                 const SizedBox(width: 10),

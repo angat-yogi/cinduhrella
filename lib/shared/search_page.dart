@@ -4,6 +4,7 @@ import 'package:cinduhrella/screens/item_page.dart';
 import 'package:cinduhrella/models/social/post.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/shared/social/profile_page.dart';
+import 'package:cinduhrella/shared/profile_avatar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -215,9 +216,9 @@ class _SearchPageState extends State<SearchPage> {
 
   Widget _buildUserTile(UserProfile user) {
     return ListTile(
-      leading: CircleAvatar(
-        backgroundImage: NetworkImage(user.profilePictureUrl ??
-            "https://example.com/default-profile.png"),
+      leading: ProfileAvatar(
+        imageUrl: user.profilePictureUrl,
+        radius: 20,
       ),
       title: Text(user.fullName ?? "Unknown User"),
       subtitle: Text("@${user.userName}"),

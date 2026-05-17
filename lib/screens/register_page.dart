@@ -1,4 +1,5 @@
 import 'package:cinduhrella/const.dart';
+import 'package:cinduhrella/models/body_measurements.dart';
 import 'package:cinduhrella/models/user_profile.dart';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
@@ -34,6 +35,10 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String? email, password, username, fullname, confirmPassword;
   File? _profileImage;
+  final TextEditingController _heightController = TextEditingController();
+  final TextEditingController _chestController = TextEditingController();
+  final TextEditingController _waistController = TextEditingController();
+  final TextEditingController _hipsController = TextEditingController();
 
   @override
   void initState() {
@@ -58,7 +63,9 @@ class _RegisterPageState extends State<RegisterPage> {
         // ✅ Register User
         bool result = await _authService.signUp(email!, password!);
         if (!result) {
-          throw Exception("Unable to register user");
+          throw Exception(
+            _authService.lastAuthErrorMessage ?? "Unable to register user",
+          );
         }
 
         String? profilePicture;
@@ -76,9 +83,15 @@ class _RegisterPageState extends State<RegisterPage> {
             uid: _authService.user!.uid,
             fullName: fullname ?? "Unknown User",
             userName: username ?? "user_${_authService.user!.uid}",
-            profilePictureUrl:
-                profilePicture ?? "https://example.com/default-profile.png",
-            following: [], // ✅ Ensure new users start with an empty following list
+            profilePictureUrl: profilePicture ?? "",
+            following: [],
+            bodyMeasurements: BodyMeasurements(
+              heightCm: _parseMeasurement(_heightController.text),
+              chestCm: _parseMeasurement(_chestController.text),
+              waistCm: _parseMeasurement(_waistController.text),
+              hipsCm: _parseMeasurement(_hipsController.text),
+            ),
+            stylePreferences: const ["planner-first", "inventory-led"],
           ),
         );
 
@@ -94,7 +107,7 @@ class _RegisterPageState extends State<RegisterPage> {
     } catch (e) {
       _logger.e("Registration Error: $e");
       _alertService.showToast(
-        text: "Failed to register. Try again!",
+        text: e.toString().replaceFirst('Exception: ', ''),
         icon: Icons.error,
       );
     } finally {
@@ -102,6 +115,22 @@ class _RegisterPageState extends State<RegisterPage> {
         isLoading = false;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _heightController.dispose();
+    _chestController.dispose();
+    _waistController.dispose();
+    _hipsController.dispose();
+    super.dispose();
+  }
+
+  double? _parseMeasurement(String value) {
+    if (value.trim().isEmpty) {
+      return null;
+    }
+    return double.tryParse(value.trim());
   }
 
   @override
@@ -163,14 +192,12 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Widget _registrationForm() {
     return Container(
-      height: MediaQuery.sizeOf(context).height * 0.6,
       margin: EdgeInsets.symmetric(
           vertical: MediaQuery.sizeOf(context).height * 0.05),
       child: Form(
         key: _formKey,
         child: Column(
-          mainAxisSize: MainAxisSize.max,
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _pfpSelectionFiled(),
@@ -202,9 +229,61 @@ class _RegisterPageState extends State<RegisterPage> {
               hintPlaceHolder: "Password",
               height: MediaQuery.sizeOf(context).height * 0.1,
             ),
+            _measurementSection(),
+            const SizedBox(height: 20),
             _registerButton(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _measurementSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Body Measurements for Static Try-On",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _measurementField(_heightController, "Height (cm)"),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _measurementField(_chestController, "Chest (cm)"),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _measurementField(_waistController, "Waist (cm)"),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _measurementField(_hipsController, "Hips (cm)"),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _measurementField(TextEditingController controller, String label) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
       ),
     );
   }
@@ -223,7 +302,7 @@ class _RegisterPageState extends State<RegisterPage> {
         radius: MediaQuery.of(context).size.width * 0.15,
         backgroundImage: _profileImage != null
             ? FileImage(_profileImage!)
-            : const AssetImage('assets/default_profile.jpg') as ImageProvider,
+            : const AssetImage('assets/images/logo.png') as ImageProvider,
         child: _profileImage == null
             ? const Icon(Icons.camera_alt, size: 40, color: Colors.grey)
             : null,

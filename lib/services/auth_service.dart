@@ -5,9 +5,12 @@ import 'package:logger/logger.dart';
 
 class AuthService {
   User? _user = FirebaseAuth.instance.currentUser;
+  String? _lastAuthErrorMessage;
   User? get user {
     return _user;
   }
+
+  String? get lastAuthErrorMessage => _lastAuthErrorMessage;
 
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final Logger _logger = Logger(); // Initialize the logger
@@ -19,32 +22,26 @@ class AuthService {
   }
 
   Future<bool> signUp(String email, String password) async {
+    _lastAuthErrorMessage = null;
     try {
-      // Attempt to sign in with email and password
       UserCredential userCredential =
           await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // If sign-in is successful, return true
       if (userCredential.user != null) {
         _user = userCredential.user;
         return true;
       }
     } on FirebaseAuthException catch (e) {
-      // Handle specific Firebase authentication errors
-      if (e.code == 'user-not-found') {
-        _logger.e('No user found for that email.');
-      } else if (e.code == 'wrong-password') {
-        _logger.e('Wrong password provided for that user.');
-      }
+      _lastAuthErrorMessage = _mapAuthError(e);
+      _logger.e('Sign up failed (${e.code}): ${e.message}');
     } catch (e) {
-      // Handle any other errors
+      _lastAuthErrorMessage = 'Unexpected error during sign up.';
       _logger.e(e);
     }
 
-    // Return false if sign-in fails
     return false;
   }
 
@@ -111,8 +108,7 @@ class AuthService {
         "uid": user.uid,
         "fullName": user.displayName ?? "Unknown User",
         "userName": user.email?.split('@')[0] ?? "user_${user.uid}",
-        "profilePictureUrl":
-            user.photoURL ?? "https://example.com/default-profile.png",
+        "profilePictureUrl": user.photoURL ?? "",
         "followingCount": 0,
         "followersCount": 0,
         "postCount": 0,
@@ -128,33 +124,49 @@ class AuthService {
   }
 
   Future<bool> login(String email, String password) async {
+    _lastAuthErrorMessage = null;
     try {
-      // Attempt to sign in with email and password
       UserCredential userCredential =
           await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // If sign-in is successful, return true
       if (userCredential.user != null) {
         _user = userCredential.user;
         return true;
       }
     } on FirebaseAuthException catch (e) {
-      // Handle specific Firebase authentication errors
-      if (e.code == 'user-not-found') {
-        _logger.e('No user found for that email.');
-      } else if (e.code == 'wrong-password') {
-        _logger.e('Wrong password provided for that user.');
-      }
+      _lastAuthErrorMessage = _mapAuthError(e);
+      _logger.e('Login failed (${e.code}): ${e.message}');
     } catch (e) {
-      // Handle any other errors
+      _lastAuthErrorMessage = 'Unexpected error during login.';
       _logger.e(e);
     }
 
-    // Return false if sign-in fails
     return false;
+  }
+
+  String _mapAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'email-already-in-use':
+        return 'That email is already in use.';
+      case 'invalid-email':
+        return 'That email address is invalid.';
+      case 'weak-password':
+        return 'Password is too weak.';
+      case 'operation-not-allowed':
+        return 'Email/password sign up is not enabled.';
+      case 'user-not-found':
+        return 'No user found for that email.';
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Email or password is incorrect.';
+      case 'network-request-failed':
+        return 'Network request failed. Check your connection.';
+      default:
+        return e.message ?? 'Authentication failed.';
+    }
   }
 
   void authStateChangesListener(User? user) {

@@ -1,13 +1,18 @@
 import 'dart:io';
 
 import 'package:cinduhrella/models/cloth.dart';
+import 'package:cinduhrella/models/body_profile.dart';
+import 'package:cinduhrella/models/draft_cloth.dart';
+import 'package:cinduhrella/models/garment_asset.dart';
 import 'package:cinduhrella/models/social/post.dart';
 import 'package:cinduhrella/models/styled_outfit.dart';
 import 'package:cinduhrella/models/to_dos/custom_task.dart';
 import 'package:cinduhrella/models/to_dos/goal.dart';
 import 'package:cinduhrella/models/to_dos/wishlist.dart';
 import 'package:cinduhrella/models/trip.dart';
+import 'package:cinduhrella/models/try_on_job.dart';
 import 'package:cinduhrella/models/user_profile.dart';
+import 'package:cinduhrella/models/wardrobe_capture_session.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
@@ -256,14 +261,16 @@ class DatabaseService {
           "uid": userProfile.uid,
           "fullName": userProfile.fullName ?? "Unknown User",
           "userName": userProfile.userName ?? "user_${userProfile.uid}",
-          "profilePictureUrl": userProfile.profilePictureUrl ??
-              "https://example.com/default-profile.png",
+          "profilePictureUrl": userProfile.profilePictureUrl ?? "",
           "followingCount": userProfile.followingCount,
           "followersCount": userProfile.followersCount,
           "postCount": userProfile.postCount,
-          "following": userProfile.following.isNotEmpty
-              ? userProfile.following
-              : [], // ✅ Ensure the following list exists
+          "following":
+              userProfile.following.isNotEmpty ? userProfile.following : [],
+          "followers": userProfile.followers,
+          "posts": userProfile.posts,
+          "bodyMeasurements": userProfile.bodyMeasurements.toJson(),
+          "stylePreferences": userProfile.stylePreferences,
         });
       }
     } catch (e) {
@@ -287,6 +294,194 @@ class DatabaseService {
       _logger.e('Error fetching user profile: $e');
       rethrow; // Re-throw the exception for further handling
     }
+  }
+
+  Future<void> saveWardrobeCaptureSession(
+    String userId,
+    WardrobeCaptureSession session,
+  ) async {
+    await _firebaseFirestore
+        .collection('users/$userId/captureSessions')
+        .doc(session.sessionId)
+        .set(session.toJson());
+  }
+
+  Future<void> saveDraftItems(String userId, List<DraftCloth> drafts) async {
+    final batch = _firebaseFirestore.batch();
+    for (final draft in drafts) {
+      final ref = _firebaseFirestore
+          .collection('users/$userId/draftItems')
+          .doc(draft.draftId);
+      batch.set(ref, draft.toJson());
+    }
+    await batch.commit();
+  }
+
+  Stream<List<DraftCloth>> getDraftItemsStream(String userId) {
+    return _firebaseFirestore
+        .collection('users/$userId/draftItems')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => DraftCloth.fromJson(doc.data()))
+          .where((draft) => draft.status == DraftItemStatus.draftDetected)
+          .toList();
+    });
+  }
+
+  Future<List<DraftCloth>> getDraftItems(String userId) async {
+    final snapshot =
+        await _firebaseFirestore.collection('users/$userId/draftItems').get();
+    return snapshot.docs.map((doc) => DraftCloth.fromJson(doc.data())).toList();
+  }
+
+  Future<List<DraftCloth>> getDraftItemsBySession(
+    String userId,
+    String sessionId,
+  ) async {
+    final snapshot = await _firebaseFirestore
+        .collection('users/$userId/draftItems')
+        .where('captureSessionId', isEqualTo: sessionId)
+        .get();
+    return snapshot.docs.map((doc) => DraftCloth.fromJson(doc.data())).toList();
+  }
+
+  Future<void> updateDraftItem(String userId, DraftCloth draft) async {
+    await _firebaseFirestore
+        .collection('users/$userId/draftItems')
+        .doc(draft.draftId)
+        .set(draft.toJson(), SetOptions(merge: true));
+  }
+
+  Future<void> dismissDraftItem(String userId, String draftId) async {
+    await _firebaseFirestore
+        .collection('users/$userId/draftItems')
+        .doc(draftId)
+        .set({'status': DraftItemStatus.dismissed.name},
+            SetOptions(merge: true));
+  }
+
+  Future<void> confirmDraftItem(String userId, DraftCloth draft) async {
+    final cloth = draft.toCloth();
+    await _firebaseFirestore
+        .collection('users/$userId/unassigned')
+        .doc(draft.draftId)
+        .set({
+      ...cloth.toJson(),
+      'confirmedFromDraft': true,
+      'addedAt': Timestamp.now(),
+    });
+
+    await _firebaseFirestore
+        .collection('users/$userId/draftItems')
+        .doc(draft.draftId)
+        .set({
+      'status': DraftItemStatus.confirmedOwned.name,
+      'needsReview': false,
+    }, SetOptions(merge: true));
+
+    if (draft.captureSessionId != null) {
+      await _firebaseFirestore
+          .collection('users/$userId/captureSessions')
+          .doc(draft.captureSessionId)
+          .set({
+        'confirmedCount': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+    }
+  }
+
+  Future<void> updateUserStyleProfile(
+    String uid,
+    UserProfile userProfile,
+  ) async {
+    try {
+      await _usersCollection
+          ?.doc(uid)
+          .set(userProfile.toJson(), SetOptions(merge: true));
+    } catch (e) {
+      _logger.e('Error updating user style profile: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> saveBodyProfile(String userId, BodyProfile bodyProfile) async {
+    await _firebaseFirestore
+        .collection('users/$userId/bodyProfiles')
+        .doc(bodyProfile.bodyProfileId)
+        .set(bodyProfile.toJson(), SetOptions(merge: true));
+  }
+
+  Future<List<BodyProfile>> getBodyProfiles(String userId) async {
+    final snapshot = await _firebaseFirestore
+        .collection('users/$userId/bodyProfiles')
+        .orderBy('createdAt', descending: true)
+        .get();
+    return snapshot.docs
+        .map((doc) => BodyProfile.fromJson(doc.data()))
+        .toList();
+  }
+
+  Future<BodyProfile?> getPrimaryBodyProfile(String userId) async {
+    final profiles = await getBodyProfiles(userId);
+    for (final profile in profiles) {
+      if (profile.isPrimary) {
+        return profile;
+      }
+    }
+    return profiles.isNotEmpty ? profiles.first : null;
+  }
+
+  Future<void> saveGarmentAsset(
+      String userId, GarmentAsset garmentAsset) async {
+    await _firebaseFirestore
+        .collection('users/$userId/garmentAssets')
+        .doc(garmentAsset.garmentAssetId)
+        .set(garmentAsset.toJson(), SetOptions(merge: true));
+  }
+
+  Future<List<GarmentAsset>> getGarmentAssets(
+    String userId, {
+    String? category,
+  }) async {
+    final snapshot = await _firebaseFirestore
+        .collection('users/$userId/garmentAssets')
+        .orderBy('createdAt', descending: true)
+        .get();
+    final assets =
+        snapshot.docs.map((doc) => GarmentAsset.fromJson(doc.data())).toList();
+    if (category == null) {
+      return assets;
+    }
+    return assets.where((asset) => asset.category == category).toList();
+  }
+
+  Future<void> saveTryOnJob(String userId, TryOnJob job) async {
+    await _firebaseFirestore
+        .collection('users/$userId/tryOnJobs')
+        .doc(job.tryOnJobId)
+        .set(job.toJson(), SetOptions(merge: true));
+  }
+
+  Future<void> saveClosetItem({
+    required String userId,
+    required String itemId,
+    required Map<String, dynamic> data,
+  }) async {
+    await _firebaseFirestore
+        .collection('users/$userId/closetItems')
+        .doc(itemId)
+        .set(data, SetOptions(merge: true));
+  }
+
+  Stream<List<TryOnJob>> getTryOnJobsStream(String userId) {
+    return _firebaseFirestore
+        .collection('users/$userId/tryOnJobs')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => TryOnJob.fromJson(doc.data())).toList();
+    });
   }
 
   //Motivator App related
@@ -564,7 +759,7 @@ class DatabaseService {
                 .snapshots()
                 .listen((itemSnapshot) {
               for (var item in itemSnapshot.docs) {
-                var itemData = item.data() as Map<String, dynamic>;
+                var itemData = item.data();
                 itemData['id'] = item.id;
                 itemData['roomId'] = roomId;
                 itemData['storageId'] = storageId;
@@ -581,7 +776,7 @@ class DatabaseService {
             .snapshots()
             .listen((unassignedSnapshot) {
           for (var item in unassignedSnapshot.docs) {
-            var itemData = item.data() as Map<String, dynamic>;
+            var itemData = item.data();
             itemData['id'] = item.id;
             itemData['roomId'] = null;
             itemData['storageId'] = null;
@@ -652,6 +847,39 @@ class DatabaseService {
       }
     } catch (e) {
       print("Error fetching user items: $e");
+    }
+
+    return categorizedItems;
+  }
+
+  Future<Map<String, List<Map<String, dynamic>>>> fetchDraftItemsForPlanner(
+    String userId,
+  ) async {
+    final categorizedItems = {
+      'top wear': <Map<String, dynamic>>[],
+      'bottom wear': <Map<String, dynamic>>[],
+      'accessories': <Map<String, dynamic>>[],
+    };
+
+    try {
+      final snapshot =
+          await _firebaseFirestore.collection('users/$userId/draftItems').get();
+
+      for (final doc in snapshot.docs) {
+        final draft = DraftCloth.fromJson(doc.data());
+        if (draft.status != DraftItemStatus.draftDetected ||
+            draft.confidence < 0.75) {
+          continue;
+        }
+        final itemData = draft.toCloth().toJson();
+        itemData['id'] = draft.draftId;
+        itemData['roomId'] = null;
+        itemData['storageId'] = null;
+        itemData['isDraft'] = true;
+        _categorizeItem(itemData, categorizedItems);
+      }
+    } catch (e) {
+      _logger.e('Error fetching draft items for planner: $e');
     }
 
     return categorizedItems;

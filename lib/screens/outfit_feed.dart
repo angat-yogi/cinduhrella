@@ -3,16 +3,16 @@ import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/shared/social/create_post.dart';
 import 'package:cinduhrella/shared/social/profile_page.dart';
 import 'package:cinduhrella/shared/social/user_post.dart';
-import 'package:cinduhrella/shared/search_page.dart';
 import 'package:cinduhrella/models/social/post.dart';
 import 'package:cinduhrella/services/database_service.dart';
+import 'package:cinduhrella/shared/profile_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
 class OutfitFeedPage extends StatefulWidget {
   final UserProfile currentUser;
 
-  const OutfitFeedPage({Key? key, required this.currentUser}) : super(key: key);
+  const OutfitFeedPage({super.key, required this.currentUser});
 
   @override
   _OutfitFeedPageState createState() => _OutfitFeedPageState();
@@ -214,9 +214,9 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
 
   Widget _buildUserTile(UserProfile user) {
     return ListTile(
-      leading: CircleAvatar(
-        backgroundImage: NetworkImage(user.profilePictureUrl ??
-            "https://example.com/default-profile.png"),
+      leading: ProfileAvatar(
+        imageUrl: user.profilePictureUrl,
+        radius: 20,
       ),
       title: Text(user.fullName ?? "Unknown User"),
       subtitle: Text("@${user.userName}"),
@@ -260,11 +260,9 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
                     ),
                   );
                 },
-                child: CircleAvatar(
-                  backgroundImage: NetworkImage(
-                    widget.currentUser.profilePictureUrl ??
-                        "https://example.com/default-profile.png",
-                  ),
+                child: ProfileAvatar(
+                  imageUrl: widget.currentUser.profilePictureUrl,
+                  radius: 20,
                 ),
               ),
               decoration: const BoxDecoration(

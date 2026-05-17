@@ -3,10 +3,10 @@ import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/models/styled_outfit.dart';
 import 'package:cinduhrella/models/user_profile.dart';
 import 'package:cinduhrella/screens/outfit_feed.dart';
+import 'package:cinduhrella/screens/bulk_capture_page.dart';
+import 'package:cinduhrella/screens/planner_page.dart';
 import 'package:cinduhrella/screens/room_page.dart';
-import 'package:cinduhrella/screens/rooms_page.dart';
 import 'package:cinduhrella/screens/saved_outfit.dart';
-import 'package:cinduhrella/screens/style_page.dart';
 import 'package:cinduhrella/screens/trip_page.dart';
 import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
@@ -14,7 +14,6 @@ import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/shared/add_item.dart';
 import 'package:cinduhrella/shared/app_drawer.dart';
 import 'package:cinduhrella/shared/custom_bar.dart';
-import 'package:cinduhrella/shared/goal_task.dart';
 import 'package:cinduhrella/shared/image_picker_dialog.dart';
 import 'package:cinduhrella/shared/outfit_widget.dart';
 import 'package:cinduhrella/shared/unassigned_item.dart';
@@ -90,7 +89,7 @@ class _HomePageState extends State<HomePage> {
         // ✅ Check before calling setState
         setState(() {
           userName = fetchedUserName ?? 'Unknown User';
-          profileImageUrl = profilePicture ?? 'assets/profile_picture.jpg';
+          profileImageUrl = profilePicture ?? '';
         });
       }
     }
@@ -295,7 +294,7 @@ class _HomePageState extends State<HomePage> {
                         color: Colors.white,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
+                            color: Colors.grey.withValues(alpha: 0.3),
                             spreadRadius: 2,
                             blurRadius: 4,
                           ),
@@ -345,7 +344,7 @@ class _HomePageState extends State<HomePage> {
 
   late final List<Widget> _widgetOptions = [
     _buildHomePage(),
-    StylePage(userId: _authService.user!.uid),
+    PlannerPage(userId: _authService.user!.uid),
     TripPage(userId: _authService.user!.uid),
     FutureBuilder<UserProfile>(
       future: _getUserProfileInformation(_authService.user!.uid),
@@ -405,7 +404,7 @@ class _HomePageState extends State<HomePage> {
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.shopping_bag), label: 'Style'),
+              icon: Icon(Icons.auto_awesome), label: 'Planner'),
           BottomNavigationBarItem(
               icon: Stack(
                 alignment: Alignment.center,
@@ -518,7 +517,7 @@ class _HomePageState extends State<HomePage> {
                         color: Colors.white,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
+                            color: Colors.grey.withValues(alpha: 0.3),
                             spreadRadius: 2,
                             blurRadius: 4,
                           ),
@@ -552,6 +551,53 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildQuickStartCaptureSection() {
+    final userId = _authService.user!.uid;
+    return StreamBuilder(
+      stream: _databaseService.getDraftItemsStream(userId),
+      builder: (context, snapshot) {
+        final draftCount = snapshot.data?.length ?? 0;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Quick-Start Closet",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  draftCount == 0
+                      ? "Skip manual item entry. Upload a batch of photos and let the app draft your closet first."
+                      : "You have $draftCount draft item(s) ready for review. Confirm them to improve planner quality.",
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const BulkCapturePage(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.camera_outdoor_outlined),
+                  label: Text(
+                    draftCount == 0
+                        ? "Start Bulk Capture"
+                        : "Add More Draft Items",
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// **📌 Home Page Content**
   Widget _buildHomePage() {
     return SingleChildScrollView(
@@ -559,6 +605,8 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _buildQuickStartCaptureSection(),
+          const SizedBox(height: 20),
           UnassignedItemsSection(), // ✅ New Section
           const SizedBox(height: 20),
           _buildRoomsSection(), // ✅ Updated Section

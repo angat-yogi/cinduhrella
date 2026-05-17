@@ -33,6 +33,10 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+.venv/
+venv/
+backend/.venv/
+__pycache__/
 
 # Symbolication related
 app.*.symbols

@@ -1,4 +1,8 @@
 import 'package:cinduhrella/authentications/settings.dart';
+import 'package:cinduhrella/screens/bulk_capture_page.dart';
+import 'package:cinduhrella/screens/closet_scanner_page.dart';
+import 'package:cinduhrella/screens/try_on_studio_page.dart';
+import 'package:cinduhrella/shared/profile_avatar.dart';
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/navigation_service.dart';
 import 'package:cinduhrella/services/alert_service.dart';
@@ -28,9 +32,9 @@ class AppDrawer extends StatelessWidget {
             ),
             child: Column(
               children: [
-                CircleAvatar(
+                ProfileAvatar(
                   radius: 40,
-                  backgroundImage: NetworkImage(profileImageUrl),
+                  imageUrl: profileImageUrl,
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -43,6 +47,45 @@ class AppDrawer extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.document_scanner_outlined),
+            title: const Text('Closet Scanner'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ClosetScannerPage(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.camera_outdoor),
+            title: const Text('Bulk Capture Closet'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BulkCapturePage(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.accessibility_new),
+            title: const Text('Try-On Studio'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TryOnStudioPage(),
+                ),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.settings),

@@ -14,4 +14,9 @@ class MediaService {
     }
     return null;
   }
+
+  Future<List<File>> getImagesFromGallery() async {
+    final List<XFile> images = await _picker.pickMultiImage();
+    return images.map((image) => File(image.path)).toList();
+  }
 }

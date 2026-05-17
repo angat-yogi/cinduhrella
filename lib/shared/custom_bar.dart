@@ -1,4 +1,5 @@
 import 'package:cinduhrella/shared/search_page.dart';
+import 'package:cinduhrella/shared/profile_avatar.dart';
 import 'package:flutter/material.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -35,9 +36,9 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                   onTap: () {
                     Scaffold.of(context).openDrawer();
                   },
-                  child: CircleAvatar(
+                  child: ProfileAvatar(
                     radius: 30,
-                    backgroundImage: NetworkImage(profileImageUrl),
+                    imageUrl: profileImageUrl,
                   ),
                 ),
                 const SizedBox(width: 12),

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path/path.dart' as path;
 import 'package:logger/logger.dart';
@@ -115,5 +116,88 @@ class StorageService {
       }
       return null;
     });
+  }
+
+  Future<String?> uploadCaptureImage({
+    required File file,
+    required String uid,
+    required String sessionId,
+  }) async {
+    try {
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}${path.extension(file.path)}';
+      final fileRef = _firebaseStorage
+          .ref('users/$uid/captureSessions/$sessionId/$fileName');
+      final snapshot = await fileRef.putFile(file);
+      if (snapshot.state == TaskState.success) {
+        return await fileRef.getDownloadURL();
+      }
+    } catch (e) {
+      _logger.e('Capture upload failed: $e');
+    }
+    return null;
+  }
+
+  Future<String?> uploadBodyProfileImage({
+    required File file,
+    required String uid,
+    required String bodyProfileId,
+  }) async {
+    try {
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}${path.extension(file.path)}';
+      final fileRef = _firebaseStorage
+          .ref('users/$uid/bodyProfiles/$bodyProfileId/$fileName');
+      final snapshot = await fileRef.putFile(file);
+      if (snapshot.state == TaskState.success) {
+        return await fileRef.getDownloadURL();
+      }
+    } catch (e) {
+      _logger.e('Body profile upload failed: $e');
+    }
+    return null;
+  }
+
+  Future<String?> uploadGarmentAssetImage({
+    required File file,
+    required String uid,
+    required String garmentAssetId,
+  }) async {
+    try {
+      final processedFile = await removeBackground(file);
+      final uploadFile = processedFile ?? file;
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}${path.extension(uploadFile.path)}';
+      final fileRef = _firebaseStorage
+          .ref('users/$uid/garmentAssets/$garmentAssetId/$fileName');
+      final snapshot = await fileRef.putFile(uploadFile);
+      if (snapshot.state == TaskState.success) {
+        return await fileRef.getDownloadURL();
+      }
+    } catch (e) {
+      _logger.e('Garment asset upload failed: $e');
+    }
+    return null;
+  }
+
+  Future<String?> uploadClosetItemImageBytes({
+    required Uint8List bytes,
+    required String uid,
+    required String itemId,
+  }) async {
+    try {
+      final fileRef =
+          _firebaseStorage.ref('users/$uid/closetItems/$itemId/crop.jpg');
+      final snapshot = await fileRef.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      if (snapshot.state == TaskState.success) {
+        return await fileRef.getDownloadURL();
+      }
+    } catch (e) {
+      _logger.e('Closet item upload failed: $e');
+    }
+    return null;
   }
 }

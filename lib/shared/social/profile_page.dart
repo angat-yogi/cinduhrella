@@ -4,6 +4,7 @@ import 'package:cinduhrella/models/user_profile.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:cinduhrella/shared/social/user_post.dart';
+import 'package:cinduhrella/shared/profile_avatar.dart';
 
 class ProfilePage extends StatefulWidget {
   final UserProfile user;
@@ -93,12 +94,9 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               child: Column(
                 children: [
-                  CircleAvatar(
+                  ProfileAvatar(
                     radius: 50,
-                    backgroundImage: NetworkImage(
-                      _userProfile.profilePictureUrl ??
-                          "https://example.com/default-profile.png",
-                    ),
+                    imageUrl: _userProfile.profilePictureUrl,
                   ),
                   const SizedBox(height: 10),
                   Text(
