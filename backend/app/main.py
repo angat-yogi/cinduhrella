@@ -7,8 +7,9 @@ from typing import Any
 
 import cv2
 import numpy as np
+from fashn_human_parser import FashnHumanParser, IDS_TO_LABELS
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from PIL import Image
+from PIL import Image, ImageOps
 from ultralytics import YOLO
 
 app = FastAPI(title="Cinduhrella Closet Scanner")
@@ -21,6 +22,9 @@ EDGE_MIN_BOX_AREA_RATIO = float(
     os.getenv("CLOSET_SCANNER_EDGE_MIN_BOX_AREA_RATIO", "0.035")
 )
 MAX_DETECTIONS = int(os.getenv("CLOSET_SCANNER_MAX_DETECTIONS", "6"))
+MIN_GARMENT_AREA_RATIO = float(os.getenv("GARMENT_MIN_AREA_RATIO", "0.003"))
+MIN_GARMENT_SIDE_PX = int(os.getenv("GARMENT_MIN_SIDE_PX", "28"))
+MAX_GARMENTS_PER_IMAGE = int(os.getenv("GARMENT_MAX_ITEMS", "10"))
 
 
 LABEL_NORMALIZATION = {
@@ -69,6 +73,34 @@ DISPLAY_LABELS = {
     "vest": "Vest",
 }
 
+PARSER_TO_APP_TYPE = {
+    "top": "Top Wear",
+    "pants": "Bottom Wear",
+    "skirt": "Bottom Wear",
+    "dress": "Others",
+    "belt": "Accessories",
+    "bag": "Accessories",
+    "hat": "Accessories",
+    "scarf": "Accessories",
+    "glasses": "Accessories",
+    "jewelry": "Accessories",
+}
+
+PARSER_TO_DISPLAY = {
+    "top": "Top",
+    "pants": "Pants",
+    "skirt": "Skirt",
+    "dress": "Dress",
+    "belt": "Belt",
+    "bag": "Bag",
+    "hat": "Hat",
+    "scarf": "Scarf",
+    "glasses": "Glasses",
+    "jewelry": "Jewelry",
+}
+
+PARSER_SUPPORTED_LABELS = set(PARSER_TO_APP_TYPE.keys())
+
 
 def _model_path() -> str:
     candidates = [
@@ -88,6 +120,11 @@ def _model_path() -> str:
 @lru_cache(maxsize=1)
 def get_model() -> YOLO:
     return YOLO(_model_path())
+
+
+@lru_cache(maxsize=1)
+def get_human_parser() -> FashnHumanParser:
+    return FashnHumanParser()
 
 
 def normalize_label(raw_label: str) -> tuple[str, str]:
@@ -123,6 +160,37 @@ def crop_to_base64(image_bgr: np.ndarray) -> str:
     if not success:
         raise ValueError("Failed to encode crop image.")
     return base64.b64encode(buffer.tobytes()).decode("utf-8")
+
+
+def transparent_crop_to_base64(image_rgb: np.ndarray, mask: np.ndarray) -> str:
+    alpha = (mask.astype(np.uint8)) * 255
+    rgba = np.dstack([image_rgb, alpha])
+    pil_image = Image.fromarray(rgba, mode="RGBA")
+    output = io.BytesIO()
+    pil_image.save(output, format="PNG")
+    return base64.b64encode(output.getvalue()).decode("utf-8")
+
+
+def extract_masked_dominant_colors(
+    image_rgb: np.ndarray, mask: np.ndarray, max_colors: int = 3
+) -> list[str]:
+    pixels = image_rgb[mask]
+    if pixels.size == 0:
+        return []
+
+    if len(pixels) > 4096:
+        step = max(1, len(pixels) // 4096)
+        pixels = pixels[::step]
+
+    rounded = (pixels // 32) * 32
+    unique, counts = np.unique(rounded, axis=0, return_counts=True)
+    sorted_indices = np.argsort(counts)[::-1][:max_colors]
+
+    colors: list[str] = []
+    for index in sorted_indices:
+        r, g, b = unique[index].tolist()
+        colors.append(f"#{r:02X}{g:02X}{b:02X}")
+    return colors
 
 
 def safe_bbox(x1: float, y1: float, x2: float, y2: float, width: int, height: int) -> tuple[int, int, int, int]:
@@ -170,6 +238,20 @@ def should_keep_detection(
     return True
 
 
+def should_keep_garment(
+    width: int,
+    height: int,
+    component_width: int,
+    component_height: int,
+    area: int,
+) -> bool:
+    if component_width < MIN_GARMENT_SIDE_PX or component_height < MIN_GARMENT_SIDE_PX:
+        return False
+    image_area = width * height
+    area_ratio = area / image_area if image_area else 0
+    return area_ratio >= MIN_GARMENT_AREA_RATIO
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -182,7 +264,7 @@ async def detect_clothes(file: UploadFile = File(...)) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Uploaded image is empty.")
 
     try:
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGB")
         image_np = np.array(image)
         image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
     except Exception as exc:  # pragma: no cover - defensive parse guard
@@ -251,4 +333,86 @@ async def detect_clothes(file: UploadFile = File(...)) -> dict[str, Any]:
         "imageWidth": width,
         "imageHeight": height,
         "detections": detections[:MAX_DETECTIONS],
+    }
+
+
+@app.post("/extract-garments")
+async def extract_garments(file: UploadFile = File(...)) -> dict[str, Any]:
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+
+    try:
+        image = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGB")
+        image_np = np.array(image)
+    except Exception as exc:
+        filename = file.filename or "unknown"
+        content_type = file.content_type or "unknown"
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Uploaded file could not be decoded as an image. "
+                f"filename={filename}, contentType={content_type}, error={exc}"
+            ),
+        ) from exc
+
+    parser = get_human_parser()
+    segmentation = parser.predict(image_np)
+    height, width = segmentation.shape[:2]
+    garments: list[dict[str, Any]] = []
+
+    for label_id in np.unique(segmentation).tolist():
+        label_name = IDS_TO_LABELS.get(int(label_id), "")
+        if label_name not in PARSER_SUPPORTED_LABELS:
+            continue
+
+        binary_mask = (segmentation == label_id).astype(np.uint8)
+        component_count, component_labels, stats, _ = cv2.connectedComponentsWithStats(
+            binary_mask,
+            connectivity=8,
+        )
+
+        for component_index in range(1, component_count):
+            x, y, component_width, component_height, area = stats[component_index]
+            if not should_keep_garment(
+                width,
+                height,
+                component_width,
+                component_height,
+                int(area),
+            ):
+                continue
+
+            component_mask = component_labels == component_index
+            crop_rgb = image_np[y : y + component_height, x : x + component_width]
+            crop_mask = component_mask[y : y + component_height, x : x + component_width]
+            if crop_rgb.size == 0:
+                continue
+
+            garments.append(
+                {
+                    "parserLabel": label_name,
+                    "type": PARSER_TO_APP_TYPE[label_name],
+                    "displayLabel": PARSER_TO_DISPLAY[label_name],
+                    "confidence": 0.9,
+                    "bbox": {
+                        "x1": int(x),
+                        "y1": int(y),
+                        "x2": int(x + component_width),
+                        "y2": int(y + component_height),
+                    },
+                    "colors": extract_masked_dominant_colors(crop_rgb, crop_mask),
+                    "cropBase64": transparent_crop_to_base64(crop_rgb, crop_mask),
+                    "area": int(area),
+                }
+            )
+
+    garments.sort(key=lambda item: item["area"], reverse=True)
+    for garment in garments:
+        garment.pop("area", None)
+
+    return {
+        "imageWidth": width,
+        "imageHeight": height,
+        "garments": garments[:MAX_GARMENTS_PER_IMAGE],
     }

@@ -113,6 +113,16 @@ class AuthService {
         "followersCount": 0,
         "postCount": 0,
         "following": [], // ✅ Ensure following list exists
+        "followers": [],
+        "posts": [],
+        "bodyMeasurements": {},
+        "stylePreferences": [],
+        "photoImportPreferences": {
+          "consentGranted": false,
+          "ownerOnlyImportEnabled": true,
+          "ownerReferenceImageUrls": [],
+          "ownerIdentityHint": "",
+        },
       });
     } else {
       // ✅ Update profile if fields are missing

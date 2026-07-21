@@ -4,8 +4,10 @@ import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/chat_service.dart';
 import 'package:cinduhrella/services/closet_scanner_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
+import 'package:cinduhrella/services/garment_extraction_service.dart';
 import 'package:cinduhrella/services/media_service.dart';
 import 'package:cinduhrella/services/navigation_service.dart';
+import 'package:cinduhrella/services/owner_photo_import_service.dart';
 import 'package:cinduhrella/services/mock_try_on_renderer.dart';
 import 'package:cinduhrella/services/remote_try_on_renderer.dart';
 import 'package:cinduhrella/services/storage_service.dart';
@@ -40,6 +42,9 @@ Future<void> registerServices() async {
   getIt.registerSingleton<DatabaseService>(
     DatabaseService(),
   );
+  getIt.registerSingleton<GarmentExtractionService>(
+    GarmentExtractionService(),
+  );
 
   getIt.registerSingleton<ChatService>(
     ChatService(),
@@ -57,6 +62,9 @@ Future<void> registerServices() async {
   );
   getIt.registerSingleton<WardrobeCaptureService>(
     WardrobeCaptureService(),
+  );
+  getIt.registerSingleton<OwnerPhotoImportService>(
+    OwnerPhotoImportService(),
   );
   getIt.registerSingleton<ClosetScannerService>(
     ClosetScannerService(),

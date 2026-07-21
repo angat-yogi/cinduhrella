@@ -1,4 +1,5 @@
 import 'package:cinduhrella/models/body_measurements.dart';
+import 'package:cinduhrella/models/photo_import_preferences.dart';
 
 class UserProfile {
   String? uid;
@@ -13,6 +14,7 @@ class UserProfile {
   List<String> posts; // ✅ List to store post IDs
   BodyMeasurements bodyMeasurements;
   List<String> stylePreferences;
+  PhotoImportPreferences photoImportPreferences;
 
   UserProfile({
     required this.uid,
@@ -27,6 +29,7 @@ class UserProfile {
     this.posts = const [], // ✅ Initialize empty list
     this.bodyMeasurements = const BodyMeasurements(),
     this.stylePreferences = const [],
+    this.photoImportPreferences = const PhotoImportPreferences(),
   });
 
   UserProfile.fromJson(Map<String, dynamic> json)
@@ -43,8 +46,10 @@ class UserProfile {
         bodyMeasurements = BodyMeasurements.fromJson(
           json['bodyMeasurements'] as Map<String, dynamic>?,
         ),
-        stylePreferences = List<String>.from(
-            json['stylePreferences'] ?? []); // ✅ Convert posts
+        stylePreferences = List<String>.from(json['stylePreferences'] ?? []),
+        photoImportPreferences = PhotoImportPreferences.fromJson(
+          json['photoImportPreferences'] as Map<String, dynamic>?,
+        );
 
   Map<String, dynamic> toJson() {
     return {
@@ -60,6 +65,7 @@ class UserProfile {
       'posts': posts, // ✅ Save posts list
       'bodyMeasurements': bodyMeasurements.toJson(),
       'stylePreferences': stylePreferences,
+      'photoImportPreferences': photoImportPreferences.toJson(),
     };
   }
 }

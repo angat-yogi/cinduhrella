@@ -1,58 +1,93 @@
 import 'package:cinduhrella/services/auth_service.dart';
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:get_it/get_it.dart';
 import 'package:cinduhrella/services/database_service.dart';
-import 'package:cinduhrella/services/alert_service.dart';
+import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 
-class UnassignedItemsSection extends StatelessWidget {
+class ClosetItemsSection extends StatelessWidget {
+  ClosetItemsSection({super.key});
+
   final DatabaseService _databaseService =
       GetIt.instance.get<DatabaseService>();
-  final AuthService _authService = GetIt.instance.get<AuthService>();
-  final AlertService _alertService = GetIt.instance.get<AlertService>();
-  final String userId = GetIt.instance.get<AuthService>().user!.uid;
-
-  UnassignedItemsSection({super.key});
+  final String _userId = GetIt.instance.get<AuthService>().user!.uid;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Unassigned Items",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const Text(
+          'Your Closet',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 10),
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('users/$userId/unassigned')
-              .snapshots(),
+        StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _databaseService.getClosetItemsStream(_userId),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
-            final items = snapshot.data?.docs ?? [];
-            if (items.isEmpty) return const Text("No unassigned items found.");
-            return ListView.builder(
+
+            final items = snapshot.data ?? const [];
+            if (items.isEmpty) {
+              return const Text(
+                'No closet items yet. Add pieces manually or import them from scans and photos.',
+              );
+            }
+
+            return ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final item = items[index];
-                final itemData = item.data() as Map<String, dynamic>;
+                final imageUrl = (item['imageUrl'] ?? '').toString();
+                final title = _titleForItem(item);
+                final subtitle = _subtitleForItem(item);
+                final type = (item['type'] ?? 'accessories').toString();
+
                 return Card(
-                  elevation: 3,
-                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  elevation: 1.5,
                   child: ListTile(
-                    leading: itemData['imageUrl'] != null
-                        ? Image.network(itemData['imageUrl'],
-                            width: 50, height: 50)
-                        : const Icon(Icons.image, size: 50),
-                    title: Text(itemData['brand'] ?? "Unknown Item"),
-                    subtitle: Text(itemData['type'] ?? "No Type"),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      onPressed: () => _assignItemDialog(
-                          context, item.id, itemData), // ✅ Opens Assign Dialog
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: imageUrl.isNotEmpty
+                          ? Image.network(
+                              imageUrl,
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              width: 56,
+                              height: 56,
+                              color: Colors.black12,
+                              child: const Icon(Icons.checkroom_outlined),
+                            ),
+                    ),
+                    title: Text(title),
+                    subtitle: Text(subtitle),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _colorForType(type).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        type,
+                        style: TextStyle(
+                          color: _colorForType(type),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 );
@@ -64,130 +99,48 @@ class UnassignedItemsSection extends StatelessWidget {
     );
   }
 
-  /// **📌 Assign Item to Room/Storage Dialog**
-  void _assignItemDialog(
-      BuildContext context, String itemId, Map<String, dynamic> itemData) {
-    String? selectedRoom;
-    String? selectedStorage;
-    List<Map<String, dynamic>> rooms = [];
-    List<Map<String, dynamic>> storages = [];
-    bool isLoadingRooms = true;
-
-    /// **📌 Fetch Storages when a Room is Selected**
-    void fetchStorages(String roomId, Function(void Function()) updateDialog) {
-      _databaseService
-          .getStorages(_authService.user!.uid, roomId)
-          .listen((storageList) {
-        updateDialog(() {
-          storages = storageList;
-        });
-      });
+  String _titleForItem(Map<String, dynamic> item) {
+    final displayLabel = (item['displayLabel'] ?? '').toString().trim();
+    if (displayLabel.isNotEmpty) {
+      return displayLabel;
     }
-
-    /// **📌 Shows the Dialog Only After Data is Ready**
-    void _showDialog() {
-      showDialog(
-        context: context,
-        builder: (context) {
-          return StatefulBuilder(
-            builder: (context, setState) {
-              return AlertDialog(
-                title: const Text('Assign Item'),
-                content: isLoadingRooms
-                    ? const Center(child: CircularProgressIndicator())
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Room Dropdown
-                          DropdownButtonFormField<String>(
-                            value: selectedRoom,
-                            decoration:
-                                const InputDecoration(labelText: "Select Room"),
-                            items: rooms.map((room) {
-                              return DropdownMenuItem(
-                                value: room['roomId']?.toString() ?? '',
-                                child: Text(room['roomName']?.toString() ??
-                                    'Unknown Room'),
-                              );
-                            }).toList(),
-                            onChanged: (newValue) {
-                              setState(() {
-                                selectedRoom = newValue;
-                                selectedStorage = null;
-                                if (newValue != null) {
-                                  fetchStorages(newValue, setState);
-                                }
-                              });
-                            },
-                          ),
-
-                          // Storage Dropdown (optional)
-                          DropdownButtonFormField<String>(
-                            value: selectedStorage,
-                            decoration: const InputDecoration(
-                                labelText: "Select Storage (Optional)"),
-                            items: storages.map((storage) {
-                              return DropdownMenuItem(
-                                value: storage['storageId']?.toString() ?? '',
-                                child: Text(
-                                    storage['storageName']?.toString() ??
-                                        'Unknown Storage'),
-                              );
-                            }).toList(),
-                            onChanged: (newValue) {
-                              setState(() {
-                                selectedStorage = newValue;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      if (selectedRoom == null || selectedRoom!.isEmpty) {
-                        _alertService.showToast(
-                          text: "Please select at least a room!",
-                          icon: Icons.error,
-                        );
-                        return;
-                      }
-
-                      await _databaseService.assignItemToRoomStorage(
-                        _authService.user!.uid,
-                        itemId,
-                        selectedRoom!,
-                        selectedStorage ?? '',
-                        itemData,
-                      );
-
-                      Navigator.pop(context);
-                    },
-                    child: const Text('Assign'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
+    final description = (item['description'] ?? '').toString().trim();
+    if (description.isNotEmpty) {
+      return description;
     }
-
-    /// **📌 Fetch Rooms Before Opening the Dialog**
-    void fetchRoomsAndShowDialog() {
-      _databaseService.getRooms(_authService.user!.uid).listen((roomList) {
-        rooms = roomList;
-        isLoadingRooms = false;
-        if (context.mounted) {
-          _showDialog();
-        }
-      });
+    final brand = (item['brand'] ?? '').toString().trim();
+    if (brand.isNotEmpty) {
+      return brand;
     }
+    return 'Closet item';
+  }
 
-    fetchRoomsAndShowDialog();
+  String _subtitleForItem(Map<String, dynamic> item) {
+    final brand = (item['brand'] ?? '').toString().trim();
+    final color = (item['color'] ?? '').toString().trim();
+    final size = (item['size'] ?? '').toString().trim();
+    final parts =
+        [brand, color, size].where((part) => part.isNotEmpty).toList();
+    return parts.isEmpty ? 'Ready in your closet' : parts.join(' • ');
+  }
+
+  Color _colorForType(String type) {
+    switch (type.toLowerCase()) {
+      case 'top wear':
+        return const Color(0xFFDB6C63);
+      case 'bottom wear':
+        return const Color(0xFF4D6CFA);
+      default:
+        return const Color(0xFF10A37F);
+    }
+  }
+}
+
+class UnassignedItemsSection extends StatelessWidget {
+  const UnassignedItemsSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClosetItemsSection();
   }
 }

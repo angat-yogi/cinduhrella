@@ -7,21 +7,19 @@ import 'package:cinduhrella/shared/social/profile_page.dart';
 import 'package:cinduhrella/shared/profile_avatar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SearchPage extends StatefulWidget {
   final String searchType; // ✅ "items", "users", or "posts"
 
-  const SearchPage({Key? key, required this.searchType}) : super(key: key);
+  const SearchPage({super.key, required this.searchType});
 
   @override
   State<SearchPage> createState() => _SearchPageState();
 }
 
 class _SearchPageState extends State<SearchPage> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GetIt _getIt = GetIt.instance;
   late DatabaseService _databaseService;
@@ -32,7 +30,6 @@ class _SearchPageState extends State<SearchPage> {
   List<String> _searchHistory = [];
 
   String _dynamicHint = "Search...";
-  int _currentHintIndex = 0;
   Timer? _hintTimer;
 
   @override
@@ -82,37 +79,13 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchItems(String userId) async {
-    List<Map<String, dynamic>> itemsList = [];
-    QuerySnapshot roomsSnapshot =
-        await _firestore.collection('users/$userId/rooms').get();
-    for (var roomDoc in roomsSnapshot.docs) {
-      String roomId = roomDoc.id;
-      String roomName = roomDoc['roomName'];
-
-      QuerySnapshot storagesSnapshot = await _firestore
-          .collection('users/$userId/rooms/$roomId/storages')
-          .get();
-      for (var storageDoc in storagesSnapshot.docs) {
-        String storageId = storageDoc.id;
-        String storageName = storageDoc['storageName'];
-
-        QuerySnapshot itemsSnapshot = await _firestore
-            .collection('users/$userId/rooms/$roomId/storages/$storageId/items')
-            .get();
-        for (var itemDoc in itemsSnapshot.docs) {
-          Map<String, dynamic> itemData =
-              itemDoc.data() as Map<String, dynamic>;
-          itemData['itemId'] = itemDoc.id;
-          itemData['roomId'] = roomId;
-          itemData['roomName'] = roomName;
-          itemData['storageId'] = storageId;
-          itemData['storageName'] = storageName;
-
-          itemsList.add(itemData);
-        }
-      }
-    }
-    return itemsList;
+    final items = await _databaseService.fetchAllClosetItemsFlat(userId);
+    return items.map((item) {
+      return {
+        ...item,
+        'itemId': item['id'] ?? item['clothId'],
+      };
+    }).toList();
   }
 
   void _filterResults(String query) {

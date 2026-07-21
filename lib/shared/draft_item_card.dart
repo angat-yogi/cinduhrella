@@ -72,6 +72,22 @@ class DraftItemCard extends StatelessWidget {
                           'Confidence ${(draft.confidence * 100).round()}%',
                         ),
                       ),
+                      if (draft.source ==
+                          DraftItemSource.ownerPhotoLibrary) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Owner match ${(draft.ownerMatchConfidence * 100).round()}%',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (draft.importContext.trim().isNotEmpty)
+                          Text(
+                            draft.importContext,
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                      ],
                     ],
                   ),
                 ),

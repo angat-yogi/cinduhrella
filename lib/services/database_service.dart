@@ -4,6 +4,7 @@ import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/models/body_profile.dart';
 import 'package:cinduhrella/models/draft_cloth.dart';
 import 'package:cinduhrella/models/garment_asset.dart';
+import 'package:cinduhrella/models/photo_import_job.dart';
 import 'package:cinduhrella/models/social/post.dart';
 import 'package:cinduhrella/models/styled_outfit.dart';
 import 'package:cinduhrella/models/to_dos/custom_task.dart';
@@ -271,6 +272,7 @@ class DatabaseService {
           "posts": userProfile.posts,
           "bodyMeasurements": userProfile.bodyMeasurements.toJson(),
           "stylePreferences": userProfile.stylePreferences,
+          "photoImportPreferences": userProfile.photoImportPreferences.toJson(),
         });
       }
     } catch (e) {
@@ -463,6 +465,25 @@ class DatabaseService {
         .set(job.toJson(), SetOptions(merge: true));
   }
 
+  Future<void> savePhotoImportJob(String userId, PhotoImportJob job) async {
+    await _firebaseFirestore
+        .collection('users/$userId/photoImportJobs')
+        .doc(job.jobId)
+        .set(job.toJson(), SetOptions(merge: true));
+  }
+
+  Stream<List<PhotoImportJob>> getPhotoImportJobsStream(String userId) {
+    return _firebaseFirestore
+        .collection('users/$userId/photoImportJobs')
+        .orderBy('updatedAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => PhotoImportJob.fromJson(doc.data()))
+          .toList();
+    });
+  }
+
   Future<void> saveClosetItem({
     required String userId,
     required String itemId,
@@ -472,6 +493,34 @@ class DatabaseService {
         .collection('users/$userId/closetItems')
         .doc(itemId)
         .set(data, SetOptions(merge: true));
+  }
+
+  Stream<List<Map<String, dynamic>>> getClosetItemsStream(String userId) {
+    return _firebaseFirestore
+        .collection('users/$userId/closetItems')
+        .snapshots()
+        .asyncMap((_) => fetchAllClosetItemsFlat(userId));
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAllClosetItemsFlat(
+    String userId,
+  ) async {
+    final categorizedItems = await fetchUserItems(userId);
+    final seenIds = <String>{};
+    final flattened = <Map<String, dynamic>>[];
+
+    for (final categoryItems in categorizedItems.values) {
+      for (final item in categoryItems) {
+        final itemId = (item['id'] ?? item['clothId'] ?? '').toString();
+        if (itemId.isEmpty || seenIds.contains(itemId)) {
+          continue;
+        }
+        seenIds.add(itemId);
+        flattened.add(item);
+      }
+    }
+
+    return flattened;
   }
 
   Stream<List<TryOnJob>> getTryOnJobsStream(String userId) {
@@ -799,6 +848,21 @@ class DatabaseService {
     };
 
     try {
+      final closetItemsSnapshot = await _firebaseFirestore
+          .collection('users/$userId/closetItems')
+          .get();
+
+      for (final item in closetItemsSnapshot.docs) {
+        final itemData = item.data();
+        itemData['id'] = item.id;
+        itemData['clothId'] ??= item.id;
+        itemData['storageId'] ??= null;
+        itemData['roomId'] ??= null;
+        itemData['uid'] ??= itemData['userId'] ?? userId;
+        itemData['type'] = _displayTypeForItem(itemData);
+        _categorizeItem(itemData, categorizedItems);
+      }
+
       // ✅ Step 1: Fetch all rooms for the user
       QuerySnapshot roomsSnapshot =
           await _firebaseFirestore.collection('users/$userId/rooms').get();
@@ -888,7 +952,8 @@ class DatabaseService {
   /// **📌 Helper Function to Categorize Items**
   void _categorizeItem(Map<String, dynamic> itemData,
       Map<String, List<Map<String, dynamic>>> categorizedItems) {
-    String itemType = itemData['type'].toString().toLowerCase();
+    final itemType = _displayTypeForItem(itemData);
+    itemData['type'] = itemType;
 
     if (itemType == 'top wear') {
       categorizedItems['top wear']?.add(itemData);
@@ -896,6 +961,42 @@ class DatabaseService {
       categorizedItems['bottom wear']?.add(itemData);
     } else {
       categorizedItems['accessories']?.add(itemData);
+    }
+  }
+
+  String _displayTypeForItem(Map<String, dynamic> itemData) {
+    final rawType = (itemData['type'] ?? '').toString().trim().toLowerCase();
+    final normalizedCategory =
+        (itemData['normalizedCategory'] ?? '').toString().trim().toLowerCase();
+
+    final candidate =
+        normalizedCategory.isNotEmpty ? normalizedCategory : rawType;
+
+    switch (candidate) {
+      case 'top':
+      case 'top wear':
+      case 'shirt':
+      case 't-shirt':
+      case 'tshirt':
+      case 'longsleeve':
+      case 'outerwear':
+      case 'jacket':
+      case 'coat':
+      case 'hoodies':
+      case 'hoodie':
+      case 'sweatshirt':
+      case 'vest':
+        return 'top wear';
+      case 'bottom':
+      case 'bottoms':
+      case 'bottom wear':
+      case 'pants':
+      case 'pant':
+      case 'shorts':
+      case 'skirt':
+        return 'bottom wear';
+      default:
+        return 'accessories';
     }
   }
 

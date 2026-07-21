@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path/path.dart' as path;
 import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +10,9 @@ import 'package:path_provider/path_provider.dart';
 class StorageService {
   final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
   final Logger _logger = Logger();
+  static const String _photoRoomEndpoint =
+      'https://sdk.photoroom.com/v1/segment';
+  bool _backgroundRemovalDisabled = false;
 
   StorageService();
 
@@ -54,6 +58,8 @@ class StorageService {
       } else if (pathType == 'item' && roomId != null && storageId != null) {
         folderPath =
             'users/$uid/rooms/$roomId/storages/$storageId/items/$fileName';
+      } else if (pathType == 'closet') {
+        folderPath = 'users/$uid/closetItems/$fileName';
       } else if (pathType == 'unassigned') {
         folderPath = 'users/$uid/unassigned/$fileName';
       } else if (pathType == 'trips') {
@@ -71,38 +77,76 @@ class StorageService {
         return await fileRef.getDownloadURL(); // Return Firebase Storage URL
       }
     } catch (e) {
-      print("Upload Error: $e");
+      _logger.e('Upload Error: $e');
     }
     return null; // Upload failed
   }
 
   Future<File?> removeBackground(File file) async {
-    final apiKey = "ZM9TtVdxwdpjFi9aGSLubs5h";
-    final url = "https://api.remove.bg/v1.0/removebg";
-
-    // Prepare the request
-    var request = http.MultipartRequest('POST', Uri.parse(url))
-      ..headers['X-Api-Key'] = apiKey
-      ..files.add(await http.MultipartFile.fromPath(
-        'image_file',
-        file.path,
-      ));
-
-    // Send the request
-    var response = await request.send();
-    if (response.statusCode == 200) {
-      // Get the response bytes
-      var bytes = await response.stream.toBytes();
-
-      // Create a temporary file for the processed image
-      final tempFile = File(
-          '${(await getTemporaryDirectory()).path}/${path.basename(file.path)}');
-      await tempFile.writeAsBytes(bytes);
-      return tempFile; // Return the processed image file
-    } else {
-      _logger.e('Failed to remove background: ${response.reasonPhrase}');
-      return null; // Return null if the request fails
+    final inputBytes = await file.readAsBytes();
+    final outputBytes = await removeBackgroundBytes(
+      inputBytes,
+      fileName: path.basename(file.path),
+    );
+    if (outputBytes == null) {
+      return null;
     }
+
+    final tempDir = await getTemporaryDirectory();
+    final outputName = '${path.basenameWithoutExtension(file.path)}_nobg.png';
+    final tempFile = File(path.join(tempDir.path, outputName));
+    await tempFile.writeAsBytes(outputBytes, flush: true);
+    return tempFile;
+  }
+
+  Future<Uint8List?> removeBackgroundBytes(
+    Uint8List bytes, {
+    required String fileName,
+  }) async {
+    if (_backgroundRemovalDisabled) {
+      return null;
+    }
+
+    final apiKey = dotenv.env['PHOTOROOM_API_KEY'] ?? '';
+    if (apiKey.isEmpty) {
+      _logger.w(
+        'PHOTOROOM_API_KEY is not configured. Skipping background removal.',
+      );
+      return null;
+    }
+
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(_photoRoomEndpoint),
+    )
+      ..headers['x-api-key'] = apiKey
+      ..fields['format'] = 'png'
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'image_file',
+          bytes,
+          filename: fileName,
+        ),
+      );
+
+    final response = await request.send();
+    if (response.statusCode == 200) {
+      return Uint8List.fromList(await response.stream.toBytes());
+    }
+
+    final responseBody = await response.stream.bytesToString();
+    if (response.statusCode == 402) {
+      _backgroundRemovalDisabled = true;
+      _logger.w(
+        'PhotoRoom quota exhausted. Disabling background removal for this app session and falling back to original images.',
+      );
+      return null;
+    }
+
+    _logger.e(
+      'PhotoRoom background removal failed: ${response.statusCode} $responseBody',
+    );
+    return null;
   }
 
   Future<String?> uploadImageToChat(
@@ -124,11 +168,13 @@ class StorageService {
     required String sessionId,
   }) async {
     try {
+      final processedFile = await removeBackground(file);
+      final uploadFile = processedFile ?? file;
       final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}${path.extension(file.path)}';
+          '${DateTime.now().millisecondsSinceEpoch}${path.extension(uploadFile.path)}';
       final fileRef = _firebaseStorage
           .ref('users/$uid/captureSessions/$sessionId/$fileName');
-      final snapshot = await fileRef.putFile(file);
+      final snapshot = await fileRef.putFile(uploadFile);
       if (snapshot.state == TaskState.success) {
         return await fileRef.getDownloadURL();
       }
@@ -144,11 +190,13 @@ class StorageService {
     required String bodyProfileId,
   }) async {
     try {
+      final processedFile = await removeBackground(file);
+      final uploadFile = processedFile ?? file;
       final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}${path.extension(file.path)}';
+          '${DateTime.now().millisecondsSinceEpoch}${path.extension(uploadFile.path)}';
       final fileRef = _firebaseStorage
           .ref('users/$uid/bodyProfiles/$bodyProfileId/$fileName');
-      final snapshot = await fileRef.putFile(file);
+      final snapshot = await fileRef.putFile(uploadFile);
       if (snapshot.state == TaskState.success) {
         return await fileRef.getDownloadURL();
       }
@@ -186,17 +234,51 @@ class StorageService {
     required String itemId,
   }) async {
     try {
-      final fileRef =
-          _firebaseStorage.ref('users/$uid/closetItems/$itemId/crop.jpg');
-      final snapshot = await fileRef.putData(
+      final processedBytes = await removeBackgroundBytes(
         bytes,
-        SettableMetadata(contentType: 'image/jpeg'),
+        fileName: 'closet-item-$itemId.jpg',
+      );
+      final fileRef =
+          _firebaseStorage.ref('users/$uid/closetItems/$itemId/crop.png');
+      final snapshot = await fileRef.putData(
+        processedBytes ?? bytes,
+        SettableMetadata(
+          contentType: processedBytes != null ? 'image/png' : 'image/jpeg',
+        ),
       );
       if (snapshot.state == TaskState.success) {
         return await fileRef.getDownloadURL();
       }
     } catch (e) {
       _logger.e('Closet item upload failed: $e');
+    }
+    return null;
+  }
+
+  Future<String?> uploadDraftItemImageBytes({
+    required Uint8List bytes,
+    required String uid,
+    required String draftId,
+  }) async {
+    try {
+      final processedBytes = await removeBackgroundBytes(
+        bytes,
+        fileName: 'draft-item-$draftId.png',
+      );
+      final outputBytes = processedBytes ?? bytes;
+      final fileRef =
+          _firebaseStorage.ref('users/$uid/draftItems/$draftId/crop.png');
+      final snapshot = await fileRef.putData(
+        outputBytes,
+        SettableMetadata(
+          contentType: 'image/png',
+        ),
+      );
+      if (snapshot.state == TaskState.success) {
+        return await fileRef.getDownloadURL();
+      }
+    } catch (e) {
+      _logger.e('Draft item upload failed: $e');
     }
     return null;
   }

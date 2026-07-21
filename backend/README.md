@@ -2,6 +2,11 @@
 
 Minimal FastAPI service for the Cinduhrella closet scanner MVP.
 
+It now supports:
+
+- `POST /detect-clothes` for YOLO closet scanning
+- `POST /extract-garments` for multi-item garment extraction using FASHN Human Parser
+
 ## Expected model path
 
 The service looks for the YOLO model in this order:
@@ -31,3 +36,11 @@ Multipart form field:
 - `file`: image upload
 
 The response includes normalized labels, confidence, bbox, dominant colors, and a base64 crop for each detected clothing item.
+
+`POST /extract-garments`
+
+Multipart form field:
+
+- `file`: image upload
+
+The response includes one transparent PNG crop per garment region, along with parser labels, app type mapping, bbox, and dominant colors.

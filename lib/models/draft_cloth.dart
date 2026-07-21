@@ -4,6 +4,7 @@ enum DraftItemStatus { draftDetected, confirmedOwned, dismissed }
 
 enum DraftItemSource {
   bulkPhoto,
+  ownerPhotoLibrary,
   retailerPurchase,
   manual,
   recommendationFeedback
@@ -24,6 +25,8 @@ class DraftCloth {
   final String? captureSessionId;
   final bool needsReview;
   final DateTime createdAt;
+  final double ownerMatchConfidence;
+  final String importContext;
 
   const DraftCloth({
     required this.draftId,
@@ -40,6 +43,8 @@ class DraftCloth {
     this.type,
     this.color,
     this.captureSessionId,
+    this.ownerMatchConfidence = 0,
+    this.importContext = '',
   });
 
   factory DraftCloth.fromJson(Map<String, dynamic> json) {
@@ -64,6 +69,9 @@ class DraftCloth {
       captureSessionId: json['captureSessionId'],
       needsReview: json['needsReview'] ?? true,
       createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+      ownerMatchConfidence:
+          (json['ownerMatchConfidence'] as num?)?.toDouble() ?? 0,
+      importContext: json['importContext'] ?? '',
     );
   }
 
@@ -83,6 +91,8 @@ class DraftCloth {
       'captureSessionId': captureSessionId,
       'needsReview': needsReview,
       'createdAt': createdAt.toIso8601String(),
+      'ownerMatchConfidence': ownerMatchConfidence,
+      'importContext': importContext,
     };
   }
 
@@ -95,6 +105,8 @@ class DraftCloth {
     double? confidence,
     DraftItemStatus? status,
     bool? needsReview,
+    double? ownerMatchConfidence,
+    String? importContext,
   }) {
     return DraftCloth(
       draftId: draftId,
@@ -111,6 +123,8 @@ class DraftCloth {
       captureSessionId: captureSessionId,
       needsReview: needsReview ?? this.needsReview,
       createdAt: createdAt,
+      ownerMatchConfidence: ownerMatchConfidence ?? this.ownerMatchConfidence,
+      importContext: importContext ?? this.importContext,
     );
   }
 

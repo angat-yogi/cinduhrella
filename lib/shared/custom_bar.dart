@@ -1,16 +1,17 @@
 import 'package:cinduhrella/shared/search_page.dart';
 import 'package:cinduhrella/shared/profile_avatar.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String userName;
   final String profileImageUrl;
-  final String searchHint;
+  final ValueListenable<String> searchHintListenable;
 
   const CustomAppBar({
     required this.userName,
     required this.profileImageUrl,
-    required this.searchHint,
+    required this.searchHintListenable,
     super.key,
   });
 
@@ -56,28 +57,33 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
               ],
             ),
             const SizedBox(height: 8),
-            TextField(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const SearchPage(
-                            searchType: "items",
-                          )),
+            ValueListenableBuilder<String>(
+              valueListenable: searchHintListenable,
+              builder: (context, searchHint, _) {
+                return TextField(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const SearchPage(
+                                searchType: "items",
+                              )),
+                    );
+                  },
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    hintText: searchHint,
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
                 );
               },
-              readOnly: true,
-              decoration: InputDecoration(
-                hintText: searchHint,
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
-                ),
-              ),
             ),
           ],
         ),

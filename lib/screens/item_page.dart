@@ -8,8 +8,8 @@ import 'package:get_it/get_it.dart';
 
 class ItemPage extends StatefulWidget {
   final String itemId;
-  final String roomId;
-  final String storageId;
+  final String? roomId;
+  final String? storageId;
 
   const ItemPage({
     super.key,
@@ -67,11 +67,7 @@ class ItemPageState extends State<ItemPage> {
   }
 
   Future<void> _loadItemData() async {
-    DocumentSnapshot itemSnapshot = await firestore
-        .collection(
-            'users/$userId/rooms/${widget.roomId}/storages/${widget.storageId}/items')
-        .doc(widget.itemId)
-        .get();
+    final itemSnapshot = await _itemDocumentRef().get();
 
     if (itemSnapshot.exists) {
       setState(() {
@@ -86,11 +82,7 @@ class ItemPageState extends State<ItemPage> {
   }
 
   Future<void> _updateItem() async {
-    await firestore
-        .collection(
-            'users/$userId/rooms/${widget.roomId}/storages/${widget.storageId}/items')
-        .doc(widget.itemId)
-        .update({
+    await _itemDocumentRef().update({
       'brand': selectedBrand,
       'size': selectedSize,
       'type': selectedType,
@@ -105,17 +97,16 @@ class ItemPageState extends State<ItemPage> {
     _alertService.showToast(
         text: "Item updated successfully!", icon: Icons.check_box_rounded);
 
-    String? storageName = await _databaseService.getStorageName(
-        userId, widget.roomId, widget.storageId);
-
-    if (mounted) {
+    if (mounted && widget.roomId != null && widget.storageId != null) {
+      String? storageName = await _databaseService.getStorageName(
+          userId, widget.roomId!, widget.storageId!);
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => StoragePage(
-            storageId: widget.storageId,
+            storageId: widget.storageId!,
             storageName: storageName ?? "Unknown Storage", // Fallback name
-            roomId: widget.roomId,
+            roomId: widget.roomId!,
           ),
         ),
       );
@@ -264,5 +255,19 @@ class ItemPageState extends State<ItemPage> {
         ),
       ),
     );
+  }
+
+  DocumentReference<Map<String, dynamic>> _itemDocumentRef() {
+    if (widget.roomId != null && widget.storageId != null) {
+      return firestore
+          .collection(
+            'users/$userId/rooms/${widget.roomId}/storages/${widget.storageId}/items',
+          )
+          .doc(widget.itemId);
+    }
+
+    final closetRef =
+        firestore.collection('users/$userId/closetItems').doc(widget.itemId);
+    return closetRef;
   }
 }

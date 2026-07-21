@@ -74,8 +74,7 @@ class _AddItemDialogState extends State<AddItemDialog> {
                   builder: (context) {
                     return ImagePickerDialog(
                       userId: _authService.user!.uid,
-                      pathType:
-                          widget.roomId != null ? 'storage' : 'unassigned',
+                      pathType: widget.roomId != null ? 'storage' : 'closet',
                       roomId: widget.roomId,
                       storageId: widget.storageId,
                       onImagePicked: (String uploadedImageUrl) {
@@ -171,7 +170,7 @@ class _AddItemDialogState extends State<AddItemDialog> {
             if (imageUrl != null) {
               Cloth newCloth = Cloth(
                 clothId: FirebaseFirestore.instance
-                    .collection('users/${_authService.user!.uid}/items')
+                    .collection('users/${_authService.user!.uid}/closetItems')
                     .doc()
                     .id,
                 brand: selectedBrand,
@@ -189,9 +188,23 @@ class _AddItemDialogState extends State<AddItemDialog> {
                 await _databaseService.addCloth(_authService.user!.uid,
                     widget.roomId!, widget.storageId!, newCloth);
               } else {
-                // ✅ Save as an unassigned item
-                await _databaseService.addUnassignedCloth(
-                    _authService.user!.uid, newCloth);
+                await _databaseService.saveClosetItem(
+                  userId: _authService.user!.uid,
+                  itemId: newCloth.clothId!,
+                  data: {
+                    ...newCloth.toJson(),
+                    'userId': _authService.user!.uid,
+                    'normalizedCategory': _normalizedCategoryForType(
+                      selectedType,
+                    ),
+                    'displayLabel': descriptionController.text.trim().isEmpty
+                        ? selectedBrand ?? selectedType ?? 'Closet item'
+                        : descriptionController.text.trim(),
+                    'source': 'manual_add',
+                    'createdAt': Timestamp.now(),
+                    'updatedAt': Timestamp.now(),
+                  },
+                );
               }
 
               Navigator.of(context).pop();
@@ -201,5 +214,16 @@ class _AddItemDialogState extends State<AddItemDialog> {
         ),
       ],
     );
+  }
+
+  String _normalizedCategoryForType(String? type) {
+    switch ((type ?? '').trim().toLowerCase()) {
+      case 'top wear':
+        return 'top';
+      case 'bottom wear':
+        return 'bottoms';
+      default:
+        return 'accessories';
+    }
   }
 }

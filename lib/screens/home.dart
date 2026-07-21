@@ -1,20 +1,22 @@
 import 'dart:async';
 import 'package:cinduhrella/models/cloth.dart';
+import 'package:cinduhrella/models/draft_cloth.dart';
+import 'package:cinduhrella/models/photo_import_job.dart';
 import 'package:cinduhrella/models/styled_outfit.dart';
 import 'package:cinduhrella/models/user_profile.dart';
 import 'package:cinduhrella/screens/outfit_feed.dart';
 import 'package:cinduhrella/screens/bulk_capture_page.dart';
+import 'package:cinduhrella/screens/mix_match_studio_page.dart';
+import 'package:cinduhrella/screens/owner_photo_import_page.dart';
 import 'package:cinduhrella/screens/planner_page.dart';
-import 'package:cinduhrella/screens/room_page.dart';
+import 'package:cinduhrella/screens/review_detected_items_page.dart';
 import 'package:cinduhrella/screens/saved_outfit.dart';
 import 'package:cinduhrella/screens/trip_page.dart';
-import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/shared/add_item.dart';
 import 'package:cinduhrella/shared/app_drawer.dart';
 import 'package:cinduhrella/shared/custom_bar.dart';
-import 'package:cinduhrella/shared/image_picker_dialog.dart';
 import 'package:cinduhrella/shared/outfit_widget.dart';
 import 'package:cinduhrella/shared/unassigned_item.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -34,7 +36,6 @@ class _HomePageState extends State<HomePage> {
   final GetIt _getIt = GetIt.instance;
   late AuthService _authService;
   late DatabaseService _databaseService;
-  late AlertService _alertService;
   int _selectedIndex = 0;
   final List<String> _commonSearches = [
     "Black T-shirt",
@@ -48,32 +49,34 @@ class _HomePageState extends State<HomePage> {
   ];
 
   // ✅ Variables to manage dynamic hint text
-  String searchHint = "Search for an item...";
   int currentHintIndex = 0;
   Timer? hintTimer;
+  int _studioRefreshToken = 0;
+  late final ValueNotifier<String> _searchHintNotifier;
+  late final Future<UserProfile> _outfitFeedUserFuture;
 
   @override
   void initState() {
     super.initState();
     _authService = _getIt.get<AuthService>();
     _databaseService = _getIt.get<DatabaseService>();
-    _alertService = _getIt.get<AlertService>();
+    _searchHintNotifier = ValueNotifier<String>("Search for an item...");
+    _outfitFeedUserFuture = _getUserProfileInformation(_authService.user!.uid);
     _fetchProfileDetails();
     _startHintRotation(); // ✅ Start rotating search hints
   }
 
   void _startHintRotation() {
     hintTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      setState(() {
-        currentHintIndex = (currentHintIndex + 1) % _commonSearches.length;
-        searchHint = _commonSearches[currentHintIndex];
-      });
+      currentHintIndex = (currentHintIndex + 1) % _commonSearches.length;
+      _searchHintNotifier.value = _commonSearches[currentHintIndex];
     });
   }
 
   @override
   void dispose() {
     hintTimer?.cancel(); // ✅ Cancel the hint rotation timer
+    _searchHintNotifier.dispose();
     super.dispose();
   }
 
@@ -95,270 +98,27 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _showAddRoomDialog(
-      BuildContext context, FirebaseFirestore firestore, String userId) {
-    final TextEditingController roomNameController = TextEditingController();
-    String? imageUrl; // Store Firebase Storage URL
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10.0),
-              ),
-              child: SingleChildScrollView(
-                // ✅ Allows scrolling when keyboard appears
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context)
-                      .viewInsets
-                      .bottom, // ✅ Adjust for keyboard
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Add New Room',
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: roomNameController,
-                        decoration:
-                            const InputDecoration(labelText: 'Room Name'),
-                      ),
-                      const SizedBox(height: 16),
-                      imageUrl != null
-                          ? Image.network(
-                              imageUrl!, // Display the uploaded image
-                              width: 150,
-                              height: 150,
-                              fit: BoxFit.cover,
-                            )
-                          : const SizedBox.shrink(),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) {
-                              return ImagePickerDialog(
-                                userId: userId,
-                                pathType: 'room',
-                                onImagePicked: (String uploadedImageUrl) {
-                                  setState(() {
-                                    imageUrl =
-                                        uploadedImageUrl; // Store Firebase Storage URL
-                                  });
-                                },
-                              );
-                            },
-                          );
-                        },
-                        child: const Text('Pick Image'),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                            child: const Text('Cancel'),
-                          ),
-                          TextButton(
-                            onPressed: () async {
-                              final roomName = roomNameController.text.trim();
-
-                              if (roomName.isEmpty) {
-                                _alertService.showToast(
-                                    text: "Room name is required",
-                                    icon: Icons.check_box_rounded);
-
-                                return;
-                              }
-
-                              if (imageUrl == null) {
-                                _alertService.showToast(
-                                    text: "Image is required",
-                                    icon: Icons.error);
-                                return;
-                              }
-
-                              try {
-                                await firestore
-                                    .collection('users/$userId/rooms')
-                                    .add({
-                                  'roomName': roomName,
-                                  'imageUrl': imageUrl,
-                                });
-
-                                // ✅ Ensure the dialog is closed properly after Firestore update
-                                if (context.mounted) {
-                                  Navigator.of(context).pop();
-                                }
-                              } catch (e) {
-                                _alertService.showToast(
-                                    text: "Failed to add room",
-                                    icon: Icons.error);
-                              }
-                            },
-                            child: const Text('Add'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildRoomsSection() {
-    final FirebaseFirestore firestore = FirebaseFirestore.instance;
-    String userId = _authService.user!.uid;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              "Your Rooms",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            IconButton(
-              icon: const Icon(Icons.add, size: 24, color: Colors.blue),
-              onPressed: () {
-                _showAddRoomDialog(context, firestore, userId);
-              },
-            ),
-          ],
+  List<Widget> get _widgetOptions => [
+        _buildHomePage(),
+        PlannerPage(userId: _authService.user!.uid),
+        MixMatchStudioPage(
+          userId: _authService.user!.uid,
+          refreshToken: _studioRefreshToken,
         ),
-        const SizedBox(height: 10),
-        const SizedBox(height: 10),
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('users/$userId/rooms')
-              .snapshots(),
+        TripPage(userId: _authService.user!.uid),
+        FutureBuilder<UserProfile>(
+          future: _outfitFeedUserFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-              return const Text(
-                'No rooms found. Add a new room!',
-                style: TextStyle(fontSize: 16),
-              );
+            if (snapshot.hasError) {
+              return const Center(child: Text("Error loading profile"));
             }
-
-            final rooms = snapshot.data!.docs;
-
-            return SizedBox(
-              height: 150, // Adjusted for horizontal scrolling
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: rooms.length,
-                itemBuilder: (context, index) {
-                  final room = rooms[index];
-                  final imageUrl = room['imageUrl'] ?? '';
-                  final roomId = room.id;
-                  final roomName = room['roomName'];
-
-                  return GestureDetector(
-                    onTap: () {
-                      // Navigate to RoomPage when a room is clicked
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              RoomPage(roomId: roomId, roomName: roomName),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      width: 120,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8.0),
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withValues(alpha: 0.3),
-                            spreadRadius: 2,
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(8.0)),
-                              child: imageUrl.isNotEmpty
-                                  ? Image.network(
-                                      imageUrl,
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                    )
-                                  : Image.asset(
-                                      'assets/placeholder.png',
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                    ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Text(
-                              roomName,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            );
+            return OutfitFeedPage(currentUser: snapshot.data!);
           },
         ),
-      ],
-    );
-  }
-
-  late final List<Widget> _widgetOptions = [
-    _buildHomePage(),
-    PlannerPage(userId: _authService.user!.uid),
-    TripPage(userId: _authService.user!.uid),
-    FutureBuilder<UserProfile>(
-      future: _getUserProfileInformation(_authService.user!.uid),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return const Center(child: Text("Error loading profile"));
-        }
-        return OutfitFeedPage(currentUser: snapshot.data!);
-      },
-    ),
-  ];
+      ];
   Future<UserProfile> _getUserProfileInformation(String uid) async {
     return await _databaseService.getUserProfile(uid: uid) ??
         UserProfile(
@@ -370,6 +130,9 @@ class _HomePageState extends State<HomePage> {
 
   void _onItemTapped(int index) {
     setState(() {
+      if (index == 2 && _selectedIndex != 2) {
+        _studioRefreshToken++;
+      }
       _selectedIndex = index;
     });
   }
@@ -377,14 +140,14 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _selectedIndex == 3
+      appBar: _selectedIndex == 2 || _selectedIndex == 4
           ? null
           : CustomAppBar(
               userName: userName,
               profileImageUrl: profileImageUrl,
-              searchHint: searchHint,
+              searchHintListenable: _searchHintNotifier,
             ),
-      drawer: _selectedIndex == 3
+      drawer: _selectedIndex == 2 || _selectedIndex == 4
           ? null
           : AppDrawer(userName: userName, profileImageUrl: profileImageUrl),
       body: IndexedStack(
@@ -406,6 +169,8 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(
               icon: Icon(Icons.auto_awesome), label: 'Planner'),
           BottomNavigationBarItem(
+              icon: Icon(Icons.layers_outlined), label: 'Studio'),
+          BottomNavigationBarItem(
               icon: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -421,6 +186,7 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(
               icon: Icon(Icons.explore), label: 'Outfit Feed') // ✅ New
         ],
+        type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
         unselectedItemColor:
@@ -553,46 +319,144 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildQuickStartCaptureSection() {
     final userId = _authService.user!.uid;
-    return StreamBuilder(
+    return StreamBuilder<List<DraftCloth>>(
       stream: _databaseService.getDraftItemsStream(userId),
-      builder: (context, snapshot) {
-        final draftCount = snapshot.data?.length ?? 0;
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Quick-Start Closet",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  draftCount == 0
-                      ? "Skip manual item entry. Upload a batch of photos and let the app draft your closet first."
-                      : "You have $draftCount draft item(s) ready for review. Confirm them to improve planner quality.",
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const BulkCapturePage(),
+      builder: (context, draftSnapshot) {
+        return StreamBuilder<List<PhotoImportJob>>(
+          stream: _databaseService.getPhotoImportJobsStream(userId),
+          builder: (context, jobSnapshot) {
+            final drafts = draftSnapshot.data ?? const [];
+            final jobs = jobSnapshot.data ?? const [];
+            final draftCount = drafts.length;
+            final ownerImportCount = drafts
+                .where(
+                  (draft) => draft.source == DraftItemSource.ownerPhotoLibrary,
+                )
+                .length;
+            final activeJobs = jobs
+                .where(
+                  (job) =>
+                      job.status == PhotoImportJobStatus.queued ||
+                      job.status == PhotoImportJobStatus.processing,
+                )
+                .toList(growable: false);
+            final latestCompletedOwnerJob = jobs
+                .cast<PhotoImportJob?>()
+                .firstWhere(
+                  (job) =>
+                      job?.mode == PhotoImportJobMode.ownerLibrarySelection &&
+                      job?.status == PhotoImportJobStatus.completed &&
+                      (job?.sessionId ?? '').isNotEmpty,
+                  orElse: () => null,
+                );
+
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Quick-Start Closet",
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      draftCount == 0
+                          ? "Skip manual item entry. Upload wardrobe shots or import from your personal photos, then confirm only the pieces you want in your closet."
+                          : "You have $draftCount draft item(s) pending review, including $ownerImportCount from personal photos. Confirm them to improve planner quality.",
+                    ),
+                    if (activeJobs.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      ...activeJobs.map(
+                        (job) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '${job.title}: ${job.processedImages}/${job.totalImages} processed',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.camera_outdoor_outlined),
-                  label: Text(
-                    draftCount == 0
-                        ? "Start Bulk Capture"
-                        : "Add More Draft Items",
-                  ),
+                    ],
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const BulkCapturePage(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.camera_outdoor_outlined),
+                          label: Text(
+                            draftCount == 0
+                                ? "Start Bulk Capture"
+                                : "Add Wardrobe Photos",
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const OwnerPhotoImportPage(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: const Text("Import My Photos"),
+                        ),
+                      ],
+                    ),
+                    if (ownerImportCount > 0) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        '$ownerImportCount personal-photo draft(s) are waiting in pending review. Nothing is auto-added to your closet.',
+                        style: TextStyle(color: Colors.grey.shade700),
+                      ),
+                    ],
+                    if (latestCompletedOwnerJob?.sessionId != null) ...[
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ReviewDetectedItemsPage(
+                                sessionId: latestCompletedOwnerJob!.sessionId!,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.fact_check_outlined),
+                        label: const Text('Open Latest Pending Review'),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -607,10 +471,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           _buildQuickStartCaptureSection(),
           const SizedBox(height: 20),
-          UnassignedItemsSection(), // ✅ New Section
-          const SizedBox(height: 20),
-          _buildRoomsSection(), // ✅ Updated Section
-          // GoalTasksSection() // ✅ New Section
+          ClosetItemsSection(),
           const SizedBox(height: 5),
           _buildSavedOutfitsSection(),
           const SizedBox(height: 80),

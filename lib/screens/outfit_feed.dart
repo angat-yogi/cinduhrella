@@ -25,6 +25,7 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
   late AuthService _authService;
   final TextEditingController _searchController = TextEditingController();
   List<UserProfile> _searchResults = [];
+  final Map<String, Future<UserProfile?>> _userProfileFutures = {};
 
   @override
   void initState() {
@@ -44,6 +45,10 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
       print("User found: ${userProfile.fullName}");
     }
     return userProfile;
+  }
+
+  Future<UserProfile?> _cachedUserProfileFuture(String uid) {
+    return _userProfileFutures.putIfAbsent(uid, () => fetchUserProfile(uid));
   }
 
   void _searchUsers(String query) async {
@@ -126,7 +131,8 @@ class _OutfitFeedPageState extends State<OutfitFeedPage> {
                                     "No description"),
                               ),
                               FutureBuilder<UserProfile?>(
-                                future: fetchUserProfile(posts[index].uid!),
+                                future:
+                                    _cachedUserProfileFuture(posts[index].uid!),
                                 builder: (context, userSnapshot) {
                                   if (userSnapshot.connectionState ==
                                       ConnectionState.waiting) {

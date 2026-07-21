@@ -1,6 +1,7 @@
 import 'package:cinduhrella/authentications/settings.dart';
 import 'package:cinduhrella/screens/bulk_capture_page.dart';
 import 'package:cinduhrella/screens/closet_scanner_page.dart';
+import 'package:cinduhrella/screens/owner_photo_import_page.dart';
 import 'package:cinduhrella/screens/try_on_studio_page.dart';
 import 'package:cinduhrella/shared/profile_avatar.dart';
 import 'package:cinduhrella/services/auth_service.dart';
@@ -70,6 +71,19 @@ class AppDrawer extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (context) => const BulkCapturePage(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Import From My Photos'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const OwnerPhotoImportPage(),
                 ),
               );
             },
