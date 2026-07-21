@@ -206,6 +206,25 @@ class StorageService {
     return null;
   }
 
+  Future<String?> uploadOwnerReferenceImage({
+    required File file,
+    required String uid,
+  }) async {
+    try {
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}${path.extension(file.path)}';
+      final fileRef =
+          _firebaseStorage.ref('users/$uid/photoImportReferences/$fileName');
+      final snapshot = await fileRef.putFile(file);
+      if (snapshot.state == TaskState.success) {
+        return await fileRef.getDownloadURL();
+      }
+    } catch (e) {
+      _logger.e('Owner reference upload failed: $e');
+    }
+    return null;
+  }
+
   Future<String?> uploadGarmentAssetImage({
     required File file,
     required String uid,

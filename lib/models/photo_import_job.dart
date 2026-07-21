@@ -1,7 +1,8 @@
-enum PhotoImportJobStatus { queued, processing, completed, failed }
+enum PhotoImportJobStatus { queued, processing, completed, failed, cancelled }
 
 enum PhotoImportJobMode {
   ownerLibrarySelection,
+  ownerLibraryAutoScan,
   bulkWardrobeSelection,
   manualCapture,
 }

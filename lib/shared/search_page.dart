@@ -180,6 +180,7 @@ class _SearchPageState extends State<SearchPage> {
               itemId: item['itemId'],
               roomId: item['roomId'],
               storageId: item['storageId'],
+              initialItemData: item,
             ),
           ),
         );

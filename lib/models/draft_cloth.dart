@@ -1,6 +1,11 @@
 import 'package:cinduhrella/models/cloth.dart';
 
-enum DraftItemStatus { draftDetected, confirmedOwned, dismissed }
+enum DraftItemStatus {
+  draftDetected,
+  confirmedOwned,
+  dismissed,
+  savedForLater,
+}
 
 enum DraftItemSource {
   bulkPhoto,

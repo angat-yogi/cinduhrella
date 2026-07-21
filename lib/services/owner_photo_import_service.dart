@@ -8,6 +8,7 @@ import 'package:cinduhrella/models/user_profile.dart';
 import 'package:cinduhrella/models/wardrobe_capture_session.dart';
 import 'package:cinduhrella/services/chat_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
+import 'package:cinduhrella/services/media_service.dart';
 import 'package:cinduhrella/services/storage_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get_it/get_it.dart';
@@ -15,10 +16,12 @@ import 'package:get_it/get_it.dart';
 class OwnerPhotoImportResult {
   final WardrobeCaptureSession session;
   final List<DraftCloth> drafts;
+  final int processedImages;
 
   const OwnerPhotoImportResult({
     required this.session,
     required this.drafts,
+    required this.processedImages,
   });
 }
 
@@ -28,15 +31,19 @@ class OwnerPhotoImportService {
     _databaseService = getIt.get<DatabaseService>();
     _storageService = getIt.get<StorageService>();
     _chatService = getIt.get<ChatService>();
+    _mediaService = getIt.get<MediaService>();
   }
 
   late final DatabaseService _databaseService;
   late final StorageService _storageService;
   late final ChatService _chatService;
+  late final MediaService _mediaService;
 
   Future<PhotoImportJob> queueOwnerPhotoImport({
     required UserProfile profile,
     required List<File> images,
+    PhotoImportJobMode mode = PhotoImportJobMode.ownerLibrarySelection,
+    String? title,
   }) async {
     final userId = profile.uid!;
     final now = DateTime.now();
@@ -46,11 +53,11 @@ class OwnerPhotoImportService {
       jobId: jobId,
       userId: userId,
       status: PhotoImportJobStatus.queued,
-      mode: PhotoImportJobMode.ownerLibrarySelection,
+      mode: mode,
       totalImages: images.length,
       processedImages: 0,
       createdDrafts: 0,
-      title: 'Import from my photos',
+      title: title ?? 'Import from my photos',
       createdAt: now,
       updatedAt: now,
     );
@@ -81,9 +88,95 @@ class OwnerPhotoImportService {
     await _databaseService.updateUserStyleProfile(profile.uid!, updated);
   }
 
+  Future<PhotoImportJob?> syncSelectedCollectionIfNeeded({
+    required UserProfile profile,
+    bool force = false,
+    int limit = 24,
+  }) async {
+    final preferences = profile.photoImportPreferences;
+    final userId = profile.uid!;
+
+    if (!preferences.consentGranted ||
+        !preferences.collectionAutoSyncEnabled ||
+        preferences.sourceCollectionId.trim().isEmpty) {
+      return null;
+    }
+
+    final activeJobs = await _databaseService.getPhotoImportJobs(userId);
+    final hasActiveCollectionSync = activeJobs.any(
+      (job) =>
+          (job.status == PhotoImportJobStatus.queued ||
+              job.status == PhotoImportJobStatus.processing) &&
+          job.mode == PhotoImportJobMode.ownerLibraryAutoScan,
+    );
+    if (hasActiveCollectionSync) {
+      return null;
+    }
+
+    final lastSyncAt = preferences.lastCollectionSyncAt;
+    if (!force &&
+        lastSyncAt != null &&
+        DateTime.now().difference(lastSyncAt) < const Duration(minutes: 10)) {
+      return null;
+    }
+
+    final assets = await _mediaService.getImagesFromCollection(
+      collectionId: preferences.sourceCollectionId,
+      limit: limit,
+      excludeAssetIds: preferences.processedSourceAssetIds.toSet(),
+    );
+    if (assets.isEmpty) {
+      await updatePreferences(
+        profile: profile,
+        preferences: preferences.copyWith(
+          lastCollectionSyncAt: DateTime.now(),
+        ),
+      );
+      return null;
+    }
+
+    final refreshedPreferences = preferences.copyWith(
+      lastCollectionSyncAt: DateTime.now(),
+      processedSourceAssetIds: [
+        ...assets.map((asset) => asset.assetId),
+        ...preferences.processedSourceAssetIds,
+      ].take(300).toList(),
+    );
+    await updatePreferences(
+      profile: profile,
+      preferences: refreshedPreferences,
+    );
+
+    final refreshedProfile = UserProfile(
+      uid: profile.uid,
+      fullName: profile.fullName,
+      profilePictureUrl: profile.profilePictureUrl,
+      userName: profile.userName,
+      followingCount: profile.followingCount,
+      followersCount: profile.followersCount,
+      postCount: profile.postCount,
+      following: profile.following,
+      followers: profile.followers,
+      posts: profile.posts,
+      bodyMeasurements: profile.bodyMeasurements,
+      stylePreferences: profile.stylePreferences,
+      photoImportPreferences: refreshedPreferences,
+    );
+
+    return queueOwnerPhotoImport(
+      profile: refreshedProfile,
+      images: assets.map((asset) => asset.file).toList(growable: false),
+      mode: PhotoImportJobMode.ownerLibraryAutoScan,
+      title: 'Sync ${preferences.sourceCollectionName.isEmpty ? "selected collection" : preferences.sourceCollectionName}',
+    );
+  }
+
   Future<OwnerPhotoImportResult> importFromSelectedPhotos({
     required UserProfile profile,
     required List<File> images,
+    Future<bool> Function(int processedCount)? shouldContinue,
+    Future<void> Function(int processedCount, int createdDrafts)?
+        onProgressChanged,
   }) async {
     final userId = profile.uid!;
     final sessionId =
@@ -98,14 +191,28 @@ class OwnerPhotoImportService {
       ...preferences.ownerReferenceImageUrls.take(2),
     ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' | ');
 
+    var processedCount = 0;
+
     for (final image in images) {
+      if (shouldContinue != null) {
+        final continueImport = await shouldContinue(processedCount);
+        if (!continueImport) {
+          break;
+        }
+      }
+
       final imageUrl = await _storageService.uploadCaptureImage(
         file: image,
         uid: userId,
         sessionId: sessionId,
       );
 
+      processedCount += 1;
+
       if (imageUrl == null) {
+        if (onProgressChanged != null) {
+          await onProgressChanged(processedCount, drafts.length);
+        }
         continue;
       }
 
@@ -123,6 +230,9 @@ class OwnerPhotoImportService {
 
       if ((details['type'] ?? '').trim().isEmpty &&
           ownerMatchConfidence < 0.55) {
+        if (onProgressChanged != null) {
+          await onProgressChanged(processedCount, drafts.length);
+        }
         continue;
       }
 
@@ -147,6 +257,10 @@ class OwnerPhotoImportService {
               details['ownerReason'] ?? 'Imported from personal photos',
         ),
       );
+
+      if (onProgressChanged != null) {
+        await onProgressChanged(processedCount, drafts.length);
+      }
     }
 
     final session = WardrobeCaptureSession(
@@ -163,7 +277,11 @@ class OwnerPhotoImportService {
     await _databaseService.saveWardrobeCaptureSession(userId, session);
     await _databaseService.saveDraftItems(userId, drafts);
 
-    return OwnerPhotoImportResult(session: session, drafts: drafts);
+    return OwnerPhotoImportResult(
+      session: session,
+      drafts: drafts,
+      processedImages: processedCount,
+    );
   }
 
   double _estimateConfidence(
@@ -193,12 +311,46 @@ class OwnerPhotoImportService {
       final result = await importFromSelectedPhotos(
         profile: profile,
         images: images,
+        shouldContinue: (processedCount) async {
+          final currentJob = await _databaseService.getPhotoImportJob(
+            job.userId,
+            job.jobId,
+          );
+          return currentJob?.status != PhotoImportJobStatus.cancelled;
+        },
+        onProgressChanged: (processedCount, createdDrafts) async {
+          final currentJob = await _databaseService.getPhotoImportJob(
+            job.userId,
+            job.jobId,
+          );
+          if (currentJob?.status == PhotoImportJobStatus.cancelled) {
+            return;
+          }
+          await _databaseService.savePhotoImportJob(
+            job.userId,
+            job.copyWith(
+              status: PhotoImportJobStatus.processing,
+              processedImages: processedCount,
+              createdDrafts: createdDrafts,
+              updatedAt: DateTime.now(),
+            ),
+          );
+        },
       );
+
+      final currentJob = await _databaseService.getPhotoImportJob(
+        job.userId,
+        job.jobId,
+      );
+      if (currentJob?.status == PhotoImportJobStatus.cancelled) {
+        return;
+      }
+
       await _databaseService.savePhotoImportJob(
         job.userId,
         job.copyWith(
           status: PhotoImportJobStatus.completed,
-          processedImages: images.length,
+          processedImages: result.processedImages,
           createdDrafts: result.drafts.length,
           sessionId: result.session.sessionId,
           updatedAt: DateTime.now(),

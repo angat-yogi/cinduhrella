@@ -4,6 +4,11 @@ class PhotoImportPreferences {
   final List<String> ownerReferenceImageUrls;
   final DateTime? consentedAt;
   final String ownerIdentityHint;
+  final String sourceCollectionId;
+  final String sourceCollectionName;
+  final bool collectionAutoSyncEnabled;
+  final List<String> processedSourceAssetIds;
+  final DateTime? lastCollectionSyncAt;
 
   const PhotoImportPreferences({
     this.consentGranted = false,
@@ -11,6 +16,11 @@ class PhotoImportPreferences {
     this.ownerReferenceImageUrls = const [],
     this.consentedAt,
     this.ownerIdentityHint = '',
+    this.sourceCollectionId = '',
+    this.sourceCollectionName = '',
+    this.collectionAutoSyncEnabled = false,
+    this.processedSourceAssetIds = const [],
+    this.lastCollectionSyncAt,
   });
 
   factory PhotoImportPreferences.fromJson(Map<String, dynamic>? json) {
@@ -24,6 +34,13 @@ class PhotoImportPreferences {
           List<String>.from(json['ownerReferenceImageUrls'] ?? const []),
       consentedAt: DateTime.tryParse(json['consentedAt'] ?? ''),
       ownerIdentityHint: json['ownerIdentityHint'] ?? '',
+      sourceCollectionId: json['sourceCollectionId'] ?? '',
+      sourceCollectionName: json['sourceCollectionName'] ?? '',
+      collectionAutoSyncEnabled: json['collectionAutoSyncEnabled'] ?? false,
+      processedSourceAssetIds:
+          List<String>.from(json['processedSourceAssetIds'] ?? const []),
+      lastCollectionSyncAt:
+          DateTime.tryParse(json['lastCollectionSyncAt'] ?? ''),
     );
   }
 
@@ -34,6 +51,11 @@ class PhotoImportPreferences {
       'ownerReferenceImageUrls': ownerReferenceImageUrls,
       'consentedAt': consentedAt?.toIso8601String(),
       'ownerIdentityHint': ownerIdentityHint,
+      'sourceCollectionId': sourceCollectionId,
+      'sourceCollectionName': sourceCollectionName,
+      'collectionAutoSyncEnabled': collectionAutoSyncEnabled,
+      'processedSourceAssetIds': processedSourceAssetIds,
+      'lastCollectionSyncAt': lastCollectionSyncAt?.toIso8601String(),
     };
   }
 
@@ -43,6 +65,11 @@ class PhotoImportPreferences {
     List<String>? ownerReferenceImageUrls,
     DateTime? consentedAt,
     String? ownerIdentityHint,
+    String? sourceCollectionId,
+    String? sourceCollectionName,
+    bool? collectionAutoSyncEnabled,
+    List<String>? processedSourceAssetIds,
+    DateTime? lastCollectionSyncAt,
   }) {
     return PhotoImportPreferences(
       consentGranted: consentGranted ?? this.consentGranted,
@@ -52,6 +79,13 @@ class PhotoImportPreferences {
           ownerReferenceImageUrls ?? this.ownerReferenceImageUrls,
       consentedAt: consentedAt ?? this.consentedAt,
       ownerIdentityHint: ownerIdentityHint ?? this.ownerIdentityHint,
+      sourceCollectionId: sourceCollectionId ?? this.sourceCollectionId,
+      sourceCollectionName: sourceCollectionName ?? this.sourceCollectionName,
+      collectionAutoSyncEnabled:
+          collectionAutoSyncEnabled ?? this.collectionAutoSyncEnabled,
+      processedSourceAssetIds:
+          processedSourceAssetIds ?? this.processedSourceAssetIds,
+      lastCollectionSyncAt: lastCollectionSyncAt ?? this.lastCollectionSyncAt,
     );
   }
 }

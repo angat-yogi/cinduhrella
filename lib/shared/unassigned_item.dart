@@ -1,5 +1,6 @@
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
+import 'package:cinduhrella/screens/item_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
@@ -72,6 +73,20 @@ class ClosetItemsSection extends StatelessWidget {
                     ),
                     title: Text(title),
                     subtitle: Text(subtitle),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ItemPage(
+                            itemId: (item['id'] ?? item['clothId'] ?? '')
+                                .toString(),
+                            roomId: item['roomId']?.toString(),
+                            storageId: item['storageId']?.toString(),
+                            initialItemData: item,
+                          ),
+                        ),
+                      );
+                    },
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,

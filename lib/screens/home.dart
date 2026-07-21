@@ -14,6 +14,7 @@ import 'package:cinduhrella/screens/saved_outfit.dart';
 import 'package:cinduhrella/screens/trip_page.dart';
 import 'package:cinduhrella/services/auth_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
+import 'package:cinduhrella/services/owner_photo_import_service.dart';
 import 'package:cinduhrella/shared/add_item.dart';
 import 'package:cinduhrella/shared/app_drawer.dart';
 import 'package:cinduhrella/shared/custom_bar.dart';
@@ -30,12 +31,13 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String userName = 'Loading...';
   String profileImageUrl = '';
   final GetIt _getIt = GetIt.instance;
   late AuthService _authService;
   late DatabaseService _databaseService;
+  late OwnerPhotoImportService _ownerPhotoImportService;
   int _selectedIndex = 0;
   final List<String> _commonSearches = [
     "Black T-shirt",
@@ -54,16 +56,20 @@ class _HomePageState extends State<HomePage> {
   int _studioRefreshToken = 0;
   late final ValueNotifier<String> _searchHintNotifier;
   late final Future<UserProfile> _outfitFeedUserFuture;
+  bool _collectionSyncInFlight = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _authService = _getIt.get<AuthService>();
     _databaseService = _getIt.get<DatabaseService>();
+    _ownerPhotoImportService = _getIt.get<OwnerPhotoImportService>();
     _searchHintNotifier = ValueNotifier<String>("Search for an item...");
     _outfitFeedUserFuture = _getUserProfileInformation(_authService.user!.uid);
     _fetchProfileDetails();
     _startHintRotation(); // ✅ Start rotating search hints
+    unawaited(_maybeStartCollectionSync());
   }
 
   void _startHintRotation() {
@@ -75,9 +81,17 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     hintTimer?.cancel(); // ✅ Cancel the hint rotation timer
     _searchHintNotifier.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_maybeStartCollectionSync());
+    }
   }
 
   Future<void> _fetchProfileDetails() async {
@@ -95,6 +109,30 @@ class _HomePageState extends State<HomePage> {
           profileImageUrl = profilePicture ?? '';
         });
       }
+    }
+  }
+
+  Future<void> _maybeStartCollectionSync() async {
+    if (_collectionSyncInFlight) {
+      return;
+    }
+
+    final uid = _authService.user?.uid;
+    if (uid == null) {
+      return;
+    }
+
+    _collectionSyncInFlight = true;
+    try {
+      final profile = await _databaseService.getUserProfile(uid: uid);
+      if (profile == null) {
+        return;
+      }
+      await _ownerPhotoImportService.syncSelectedCollectionIfNeeded(
+        profile: profile,
+      );
+    } finally {
+      _collectionSyncInFlight = false;
     }
   }
 
@@ -202,6 +240,63 @@ class _HomePageState extends State<HomePage> {
       builder: (context) {
         return const AddItemDialog();
       },
+    );
+  }
+
+  Future<void> _cancelPhotoImportJob(String userId, PhotoImportJob job) async {
+    await _databaseService.cancelPhotoImportJob(userId, job.jobId);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${job.title} cancelled.')),
+    );
+  }
+
+  Future<void> _restoreDraftToReview(String userId, DraftCloth draft) async {
+    await _databaseService.moveDraftBackToReview(userId, draft.draftId);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Moved back to review.'),
+        action: SnackBarAction(
+          label: 'Review now',
+          onPressed: _openPendingReview,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmLaterDraft(String userId, DraftCloth draft) async {
+    await _databaseService.confirmDraftItem(userId, draft);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Added to your closet.')),
+    );
+  }
+
+  Future<void> _dismissLaterDraft(String userId, DraftCloth draft) async {
+    await _databaseService.dismissDraftItem(userId, draft.draftId);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Removed from saved for later.')),
+    );
+  }
+
+  void _openPendingReview({String? sessionId}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReviewDetectedItemsPage(
+          sessionId: sessionId,
+        ),
+      ),
     );
   }
 
@@ -420,7 +515,9 @@ class _HomePageState extends State<HomePage> {
                 .cast<PhotoImportJob?>()
                 .firstWhere(
                   (job) =>
-                      job?.mode == PhotoImportJobMode.ownerLibrarySelection &&
+                      (job?.mode == PhotoImportJobMode.ownerLibrarySelection ||
+                          job?.mode ==
+                              PhotoImportJobMode.ownerLibraryAutoScan) &&
                       job?.status == PhotoImportJobStatus.completed &&
                       (job?.sessionId ?? '').isNotEmpty,
                   orElse: () => null,
@@ -448,22 +545,37 @@ class _HomePageState extends State<HomePage> {
                       ...activeJobs.map(
                         (job) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            children: [
-                              const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.035),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  '${job.title}: ${job.processedImages}/${job.totalImages} processed',
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    '${job.title}: ${job.processedImages}/${job.totalImages} processed',
+                                  ),
                                 ),
-                              ),
-                            ],
+                                TextButton(
+                                  onPressed: () =>
+                                      _cancelPhotoImportJob(userId, job),
+                                  child: const Text('Cancel'),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -511,21 +623,20 @@ class _HomePageState extends State<HomePage> {
                         style: TextStyle(color: Colors.grey.shade700),
                       ),
                     ],
-                    if (latestCompletedOwnerJob?.sessionId != null) ...[
+                    if (draftCount > 0) ...[
                       const SizedBox(height: 8),
                       TextButton.icon(
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ReviewDetectedItemsPage(
-                                sessionId: latestCompletedOwnerJob!.sessionId!,
-                              ),
-                            ),
+                          _openPendingReview(
+                            sessionId: latestCompletedOwnerJob?.sessionId,
                           );
                         },
                         icon: const Icon(Icons.fact_check_outlined),
-                        label: const Text('Open Latest Pending Review'),
+                        label: Text(
+                          latestCompletedOwnerJob?.sessionId != null
+                              ? 'Open Latest Pending Review'
+                              : 'Open Pending Review',
+                        ),
                       ),
                     ],
                   ],
@@ -533,6 +644,139 @@ class _HomePageState extends State<HomePage> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildSavedForLaterSection() {
+    final userId = _authService.user!.uid;
+    return StreamBuilder<List<DraftCloth>>(
+      stream: _databaseService.getSavedForLaterDraftItemsStream(userId),
+      builder: (context, snapshot) {
+        final drafts = snapshot.data ?? const [];
+        if (drafts.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Saved For Later',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Items you parked for later review. Bring them back when you are ready.',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 12),
+            ...drafts.map(
+              (draft) => Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.network(
+                            draft.imageUrl,
+                            width: 88,
+                            height: 88,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 88,
+                              height: 88,
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.checkroom),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (draft.type ?? 'Detected item').trim().isEmpty
+                                    ? 'Detected item'
+                                    : draft.type!.trim(),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                [
+                                  draft.brand,
+                                  draft.color,
+                                  draft.size,
+                                ]
+                                    .whereType<String>()
+                                    .where((value) => value.trim().isNotEmpty)
+                                    .join(' • '),
+                                style: TextStyle(color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Confidence ${(draft.confidence * 100).round()}%',
+                                style: const TextStyle(
+                                  color: Color(0xFF6D56A8),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () =>
+                                _restoreDraftToReview(userId, draft),
+                            icon: const Icon(Icons.replay_rounded),
+                            label: const Text('Back To Review'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () => _confirmLaterDraft(userId, draft),
+                            icon: const Icon(Icons.checkroom_rounded),
+                            label: const Text('Add'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          onPressed: () => _dismissLaterDraft(userId, draft),
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -546,6 +790,8 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildQuickStartCaptureSection(),
+          const SizedBox(height: 20),
+          _buildSavedForLaterSection(),
           const SizedBox(height: 20),
           ClosetItemsSection(),
           const SizedBox(height: 5),

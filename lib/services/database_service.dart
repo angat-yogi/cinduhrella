@@ -332,6 +332,19 @@ class DatabaseService {
     });
   }
 
+  Stream<List<DraftCloth>> getSavedForLaterDraftItemsStream(String userId) {
+    return _firebaseFirestore
+        .collection('users/$userId/draftItems')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => DraftCloth.fromJson(doc.data()))
+          .where((draft) => draft.status == DraftItemStatus.savedForLater)
+          .toList();
+    });
+  }
+
   Future<List<DraftCloth>> getDraftItems(String userId) async {
     final snapshot =
         await _firebaseFirestore.collection('users/$userId/draftItems').get();
@@ -361,6 +374,22 @@ class DatabaseService {
         .collection('users/$userId/draftItems')
         .doc(draftId)
         .set({'status': DraftItemStatus.dismissed.name},
+            SetOptions(merge: true));
+  }
+
+  Future<void> saveDraftForLater(String userId, String draftId) async {
+    await _firebaseFirestore
+        .collection('users/$userId/draftItems')
+        .doc(draftId)
+        .set({'status': DraftItemStatus.savedForLater.name},
+            SetOptions(merge: true));
+  }
+
+  Future<void> moveDraftBackToReview(String userId, String draftId) async {
+    await _firebaseFirestore
+        .collection('users/$userId/draftItems')
+        .doc(draftId)
+        .set({'status': DraftItemStatus.draftDetected.name},
             SetOptions(merge: true));
   }
 
@@ -472,6 +501,27 @@ class DatabaseService {
         .set(job.toJson(), SetOptions(merge: true));
   }
 
+  Future<PhotoImportJob?> getPhotoImportJob(String userId, String jobId) async {
+    final doc = await _firebaseFirestore
+        .collection('users/$userId/photoImportJobs')
+        .doc(jobId)
+        .get();
+    if (!doc.exists || doc.data() == null) {
+      return null;
+    }
+    return PhotoImportJob.fromJson(doc.data()!);
+  }
+
+  Future<void> cancelPhotoImportJob(String userId, String jobId) async {
+    await _firebaseFirestore
+        .collection('users/$userId/photoImportJobs')
+        .doc(jobId)
+        .set({
+      'status': PhotoImportJobStatus.cancelled.name,
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
   Stream<List<PhotoImportJob>> getPhotoImportJobsStream(String userId) {
     return _firebaseFirestore
         .collection('users/$userId/photoImportJobs')
@@ -482,6 +532,16 @@ class DatabaseService {
           .map((doc) => PhotoImportJob.fromJson(doc.data()))
           .toList();
     });
+  }
+
+  Future<List<PhotoImportJob>> getPhotoImportJobs(String userId) async {
+    final snapshot = await _firebaseFirestore
+        .collection('users/$userId/photoImportJobs')
+        .orderBy('updatedAt', descending: true)
+        .get();
+    return snapshot.docs
+        .map((doc) => PhotoImportJob.fromJson(doc.data()))
+        .toList();
   }
 
   Future<void> saveClosetItem({
