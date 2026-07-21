@@ -1,9 +1,10 @@
 import 'package:cinduhrella/models/styled_outfit.dart';
-import 'package:cinduhrella/services/alert_service.dart';
 import 'package:cinduhrella/services/database_service.dart';
+import 'package:cinduhrella/shared/styled_outfit_preview.dart';
+import 'package:cinduhrella/screens/mix_match_studio_page.dart';
+import 'package:cinduhrella/screens/outfit_details_page.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 class SavedOutfitsPage extends StatefulWidget {
   final String userId;
@@ -11,10 +12,10 @@ class SavedOutfitsPage extends StatefulWidget {
   const SavedOutfitsPage({required this.userId, super.key});
 
   @override
-  _SavedOutfitsPageState createState() => _SavedOutfitsPageState();
+  SavedOutfitsPageState createState() => SavedOutfitsPageState();
 }
 
-class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
+class SavedOutfitsPageState extends State<SavedOutfitsPage> {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final DatabaseService databaseService = DatabaseService();
   List<StyledOutfit> savedOutfits = [];
@@ -46,7 +47,7 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
         }
       });
     } catch (e) {
-      print("Error updating like status: $e");
+      debugPrint("Error updating like status: $e");
     }
   }
 
@@ -68,35 +69,7 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
         const SnackBar(content: Text("Outfit deleted successfully!")),
       );
     } catch (e) {
-      print("Error deleting outfit: $e");
-    }
-  }
-
-  Future<void> editOutfitName(String outfitId, String currentName) async {
-    TextEditingController nameController =
-        TextEditingController(text: currentName);
-
-    bool saveChanges = await _showEditDialog(nameController);
-    if (!saveChanges) return;
-
-    try {
-      await firestore
-          .collection('users/${widget.userId}/styledOutfits')
-          .doc(outfitId)
-          .update({'name': nameController.text.trim()});
-
-      setState(() {
-        for (var outfit in savedOutfits) {
-          if (outfit.outfitId == outfitId) {
-            outfit.name = nameController.text.trim();
-          }
-        }
-      });
-
-      AlertService().showToast(
-          text: "Outfit name updated!", icon: Icons.check_box_rounded);
-    } catch (e) {
-      print("Error updating outfit name: $e");
+      debugPrint("Error deleting outfit: $e");
     }
   }
 
@@ -122,28 +95,100 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
         false;
   }
 
-  Future<bool> _showEditDialog(TextEditingController nameController) async {
-    return await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("Edit Outfit Name"),
-            content: TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: "Enter new name"),
+  Future<void> _showOutfitActions(StyledOutfit outfit) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("Cancel"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text("Save"),
-              ),
-            ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  outfit.name,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFECE7FA),
+                    foregroundColor: Color(0xFF6D56A8),
+                    child: Icon(Icons.edit_note_rounded),
+                  ),
+                  title: const Text('Edit details'),
+                  subtitle: const Text('Rename the outfit and add notes.'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(this.context).push(
+                      MaterialPageRoute(
+                        builder: (_) => OutfitDetailsPage(
+                          userId: widget.userId,
+                          outfit: outfit,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFE7EEFF),
+                    foregroundColor: Color(0xFF4D6CFA),
+                    child: Icon(Icons.layers_outlined),
+                  ),
+                  title: const Text('Edit style'),
+                  subtitle:
+                      const Text('Open this saved board back inside Studio.'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(this.context).push(
+                      MaterialPageRoute(
+                        builder: (_) => MixMatchStudioPage(
+                          userId: widget.userId,
+                          initialOutfit: outfit,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFFCE8E8),
+                    foregroundColor: Colors.redAccent,
+                    child: Icon(Icons.delete_outline_rounded),
+                  ),
+                  title: const Text('Delete outfit'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    deleteOutfit(outfit.outfitId!);
+                  },
+                ),
+              ],
+            ),
           ),
-        ) ??
-        false;
+        );
+      },
+    );
   }
 
   @override
@@ -170,80 +215,102 @@ class _SavedOutfitsPageState extends State<SavedOutfitsPage> {
             itemBuilder: (context, index) {
               StyledOutfit outfit = outfits[index];
 
-              return Card(
-                elevation: 3,
-                margin: const EdgeInsets.all(10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(outfit.name,
-                                style: const TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis),
+              return GestureDetector(
+                onLongPress: () => _showOutfitActions(outfit),
+                child: Card(
+                  elevation: 1.5,
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(outfit.name,
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.edit_note_rounded,
+                                    color: Color(0xFF6D56A8),
+                                  ),
+                                  onPressed: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => OutfitDetailsPage(
+                                        userId: widget.userId,
+                                        outfit: outfit,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete,
+                                      color: Colors.red),
+                                  onPressed: () =>
+                                      deleteOutfit(outfit.outfitId!),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 320,
+                          child: StyledOutfitPreview(
+                            outfit: outfit,
+                            showTitle: false,
                           ),
-                          Row(
-                            children: [
-                              IconButton(
-                                icon:
-                                    const Icon(Icons.edit, color: Colors.blue),
-                                onPressed: () => editOutfitName(
-                                    outfit.outfitId!, outfit.name),
+                        ),
+                        if (outfit.notes.trim().isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              outfit.notes,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF6C647A),
+                                height: 1.4,
                               ),
-                              IconButton(
-                                icon:
-                                    const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () => deleteOutfit(outfit.outfitId!),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: outfit.clothes.map((cloth) {
-                          return CachedNetworkImage(
-                            imageUrl: cloth.imageUrl!,
-                            width: 80,
-                            height: 100,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) =>
-                                const CircularProgressIndicator(),
-                            errorWidget: (context, url, error) =>
-                                const Icon(Icons.error),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.thumb_up,
-                                color:
-                                    outfit.liked ? Colors.green : Colors.grey),
-                            onPressed: () =>
-                                updateOutfitLikeStatus(outfit.outfitId!, true),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.thumb_down,
-                                color: outfit.liked == false
-                                    ? Colors.redAccent
-                                    : Colors.grey),
-                            onPressed: () =>
-                                updateOutfitLikeStatus(outfit.outfitId!, false),
-                          ),
-                        ],
-                      ),
-                    ],
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.thumb_up,
+                                  color: outfit.liked
+                                      ? Colors.green
+                                      : Colors.grey),
+                              onPressed: () => updateOutfitLikeStatus(
+                                  outfit.outfitId!, true),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.thumb_down,
+                                  color: outfit.liked == false
+                                      ? Colors.redAccent
+                                      : Colors.grey),
+                              onPressed: () => updateOutfitLikeStatus(
+                                  outfit.outfitId!, false),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );

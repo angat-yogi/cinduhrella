@@ -54,10 +54,12 @@ class PlacedStudioItem {
 class MixMatchStudioPage extends StatefulWidget {
   final String userId;
   final int refreshToken;
+  final StyledOutfit? initialOutfit;
 
   const MixMatchStudioPage({
     required this.userId,
     this.refreshToken = 0,
+    this.initialOutfit,
     super.key,
   });
 
@@ -81,6 +83,7 @@ class _MixMatchStudioPageState extends State<MixMatchStudioPage> {
   bool _saving = false;
   bool _showIntro = false;
   bool _showActionMenu = false;
+  bool _didHydrateInitialOutfit = false;
   String? _selectedPlacementId;
   int _zCounter = 0;
   StudioCategory _selectedLibraryCategory = StudioCategory.top;
@@ -157,8 +160,80 @@ class _MixMatchStudioPageState extends State<MixMatchStudioPage> {
       _accessories
         ..clear()
         ..addAll(accessories);
+      if (!_didHydrateInitialOutfit && widget.initialOutfit != null) {
+        _placedItems
+          ..clear()
+          ..addAll(_placementsFromOutfit(widget.initialOutfit!));
+        _selectedPlacementId =
+            _placedItems.isEmpty ? null : _placedItems.last.placementId;
+        _zCounter = _placedItems.isEmpty
+            ? 0
+            : _placedItems.map((item) => item.zIndex).reduce(
+                    (value, element) => value > element ? value : element) +
+                1;
+        _showIntro = false;
+        _didHydrateInitialOutfit = true;
+      }
       _loading = false;
     });
+  }
+
+  List<PlacedStudioItem> _placementsFromOutfit(StyledOutfit outfit) {
+    final sourcePlacements = outfit.placements.isNotEmpty
+        ? outfit.placements
+        : _fallbackPlacementsFor(outfit.clothes);
+    return sourcePlacements
+        .map(
+          (placement) => PlacedStudioItem(
+            placementId: placement.placementId,
+            cloth: placement.cloth,
+            category: _studioCategoryFromSaved(placement.category),
+            normalizedPosition: Offset(
+              placement.normalizedDx,
+              placement.normalizedDy,
+            ),
+            scale: placement.scale,
+            zIndex: placement.zIndex,
+            quarterTurns: placement.quarterTurns,
+          ),
+        )
+        .toList();
+  }
+
+  List<StyledOutfitPlacement> _fallbackPlacementsFor(List<Cloth> clothes) {
+    var topCount = 0;
+    var bottomCount = 0;
+    var accessoryCount = 0;
+    return clothes.asMap().entries.map((entry) {
+      final index = entry.key;
+      final cloth = entry.value;
+      final category = _categoryForCloth(cloth);
+      final count = switch (category) {
+        StudioCategory.top => topCount++,
+        StudioCategory.bottom => bottomCount++,
+        StudioCategory.accessory => accessoryCount++,
+      };
+      return StyledOutfitPlacement(
+        placementId: cloth.clothId ?? 'placement_$index',
+        cloth: cloth,
+        category: category.name,
+        normalizedDx: _defaultPositionFor(category, count).dx,
+        normalizedDy: _defaultPositionFor(category, count).dy,
+        scale: _defaultScaleFor(category),
+        zIndex: index,
+      );
+    }).toList();
+  }
+
+  StudioCategory _studioCategoryFromSaved(String category) {
+    switch (category.toLowerCase()) {
+      case 'top':
+        return StudioCategory.top;
+      case 'bottom':
+        return StudioCategory.bottom;
+      default:
+        return StudioCategory.accessory;
+    }
   }
 
   StudioCategory _categoryForCloth(Cloth cloth) {
@@ -356,22 +431,47 @@ class _MixMatchStudioPageState extends State<MixMatchStudioPage> {
     });
 
     try {
-      final outfitRef = FirebaseFirestore.instance
-          .collection('users/${widget.userId}/styledOutfits')
-          .doc();
+      final isEditing = widget.initialOutfit?.outfitId != null;
+      final outfits = FirebaseFirestore.instance
+          .collection('users/${widget.userId}/styledOutfits');
+      final outfitRef = isEditing
+          ? outfits.doc(widget.initialOutfit!.outfitId)
+          : outfits.doc();
+      final createdAt = widget.initialOutfit?.createdAt ?? Timestamp.now();
       final outfit = StyledOutfit(
         outfitId: outfitRef.id,
         uid: widget.userId,
-        name: _buildOutfitName(),
+        name: widget.initialOutfit?.name.trim().isNotEmpty == true
+            ? widget.initialOutfit!.name
+            : _buildOutfitName(),
         clothes: _placedItems.map((item) => item.cloth).toList(),
-        createdAt: Timestamp.now(),
+        placements: _placedItems
+            .map(
+              (item) => StyledOutfitPlacement(
+                placementId: item.placementId,
+                cloth: item.cloth,
+                category: item.category.name,
+                normalizedDx: item.normalizedPosition.dx,
+                normalizedDy: item.normalizedPosition.dy,
+                scale: item.scale,
+                zIndex: item.zIndex,
+                quarterTurns: item.quarterTurns,
+              ),
+            )
+            .toList(),
+        notes: widget.initialOutfit?.notes ?? '',
+        createdAt: createdAt,
+        updatedAt: Timestamp.now(),
+        liked: widget.initialOutfit?.liked ?? false,
       );
       await outfitRef.set(outfit.toJson());
       if (!mounted) {
         return;
       }
       _alertService.showToast(
-        text: 'Look saved to your outfit library.',
+        text: isEditing
+            ? 'Look updated in your outfit library.'
+            : 'Look saved to your outfit library.',
         icon: Icons.check_circle_outline,
       );
       setState(() {

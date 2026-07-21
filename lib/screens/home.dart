@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:cinduhrella/models/cloth.dart';
 import 'package:cinduhrella/models/draft_cloth.dart';
 import 'package:cinduhrella/models/photo_import_job.dart';
 import 'package:cinduhrella/models/styled_outfit.dart';
@@ -7,6 +6,7 @@ import 'package:cinduhrella/models/user_profile.dart';
 import 'package:cinduhrella/screens/outfit_feed.dart';
 import 'package:cinduhrella/screens/bulk_capture_page.dart';
 import 'package:cinduhrella/screens/mix_match_studio_page.dart';
+import 'package:cinduhrella/screens/outfit_details_page.dart';
 import 'package:cinduhrella/screens/owner_photo_import_page.dart';
 import 'package:cinduhrella/screens/planner_page.dart';
 import 'package:cinduhrella/screens/review_detected_items_page.dart';
@@ -17,7 +17,7 @@ import 'package:cinduhrella/services/database_service.dart';
 import 'package:cinduhrella/shared/add_item.dart';
 import 'package:cinduhrella/shared/app_drawer.dart';
 import 'package:cinduhrella/shared/custom_bar.dart';
-import 'package:cinduhrella/shared/outfit_widget.dart';
+import 'package:cinduhrella/shared/styled_outfit_preview.dart';
 import 'package:cinduhrella/shared/unassigned_item.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -205,6 +205,95 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _showOutfitActions(StyledOutfit outfit) async {
+    final userId = _authService.user!.uid;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  outfit.name,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Choose what you want to edit.',
+                  style: TextStyle(color: Color(0xFF6C647A)),
+                ),
+                const SizedBox(height: 18),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFECE7FA),
+                    foregroundColor: Color(0xFF6D56A8),
+                    child: Icon(Icons.edit_note_rounded),
+                  ),
+                  title: const Text('Edit details'),
+                  subtitle: const Text('Rename the outfit and add notes.'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(this.context).push(
+                      MaterialPageRoute(
+                        builder: (_) => OutfitDetailsPage(
+                          userId: userId,
+                          outfit: outfit,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFE7EEFF),
+                    foregroundColor: Color(0xFF4D6CFA),
+                    child: Icon(Icons.layers_outlined),
+                  ),
+                  title: const Text('Edit style'),
+                  subtitle:
+                      const Text('Open this saved board back inside Studio.'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(this.context).push(
+                      MaterialPageRoute(
+                        builder: (_) => MixMatchStudioPage(
+                          userId: userId,
+                          initialOutfit: outfit,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildSavedOutfitsSection() {
     String userId = _authService.user!.uid;
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -236,37 +325,15 @@ class _HomePageState extends State<HomePage> {
                 .toList();
 
             return SizedBox(
-              height: 250, // Adjusted for outfit display
+              height: 308,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: outfits.length,
                 itemBuilder: (context, index) {
                   final outfit = outfits[index];
 
-                  // Get the correct images from the outfit
-                  String? topWearImage = outfit.clothes
-                      .firstWhere((c) => c.type == "Top Wear",
-                          orElse: () => Cloth.empty())
-                      .imageUrl;
-
-                  String? bottomWearImage = outfit.clothes
-                      .firstWhere((c) => c.type == "Bottom Wear",
-                          orElse: () => Cloth.empty())
-                      .imageUrl;
-
-                  String? leftAccessoryImage = outfit.clothes
-                      .firstWhere((c) => c.type == "Accessories",
-                          orElse: () => Cloth.empty())
-                      .imageUrl;
-
-                  String? rightAccessoryImage = outfit.clothes
-                      .lastWhere((c) => c.type == "Others",
-                          orElse: () => Cloth.empty())
-                      .imageUrl;
-
                   return GestureDetector(
                     onTap: () {
-                      // Show styled outfit details when tapped
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -275,34 +342,43 @@ class _HomePageState extends State<HomePage> {
                         ),
                       );
                     },
+                    onLongPress: () => _showOutfitActions(outfit),
                     child: Container(
-                      width: 180,
+                      width: 220,
                       margin: const EdgeInsets.only(right: 10),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8.0),
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withValues(alpha: 0.3),
-                            spreadRadius: 2,
-                            blurRadius: 4,
-                          ),
-                        ],
+                        borderRadius: BorderRadius.circular(28),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                      child: Stack(
                         children: [
-                          // Styled Outfit Visualization
-                          StyledOutfitWidget(
-                            outfitName: outfit.name,
-                            topWearImage: topWearImage ??
-                                'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcROe35OsA_R0tjBDYrR34n_yCOZN9tmeGcJYA&s', // Placeholder if missing
-                            bottomWearImage: bottomWearImage ??
-                                'https://res.cloudinary.com/hamstech/images/w_440,h_660/f_auto,q_auto/v1628494598/Hamstech%20App/Culottes/Culottes.jpg?_i=AA',
-                            leftAccessoryImage: leftAccessoryImage ??
-                                'https://res.cloudinary.com/hamstech/images/w_440,h_660/f_auto,q_auto/v1628494598/Hamstech%20App/Culottes/Culottes.jpg?_i=AA',
-                            rightAccessoryImage: rightAccessoryImage ??
-                                'https://res.cloudinary.com/hamstech/images/w_440,h_660/f_auto,q_auto/v1628494598/Hamstech%20App/Culottes/Culottes.jpg?_i=AA',
+                          StyledOutfitPreview(outfit: outfit),
+                          Positioned(
+                            top: 14,
+                            right: 14,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.88),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.touch_app_outlined, size: 14),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Hold',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
