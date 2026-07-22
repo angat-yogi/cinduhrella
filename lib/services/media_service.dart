@@ -20,11 +20,13 @@ class PhotoLibraryAssetFile {
   final String assetId;
   final String fileName;
   final File file;
+  final AssetEntity asset;
 
   const PhotoLibraryAssetFile({
     required this.assetId,
     required this.fileName,
     required this.file,
+    required this.asset,
   });
 }
 
@@ -150,6 +152,33 @@ class MediaService {
     return collections;
   }
 
+  Future<PhotoLibraryCollection?> ensureImageCollection({
+    required String name,
+  }) async {
+    final hasAccess = await requestPhotoLibraryAccess();
+    if (!hasAccess || name.trim().isEmpty) {
+      return null;
+    }
+
+    final existing = await getImageCollections();
+    for (final collection in existing) {
+      if (collection.name.trim().toLowerCase() == name.trim().toLowerCase()) {
+        return collection;
+      }
+    }
+
+    final created = await PhotoManager.editor.darwin.createAlbum(name.trim());
+    if (created == null) {
+      return null;
+    }
+    final count = await created.assetCountAsync;
+    return PhotoLibraryCollection(
+      id: created.id,
+      name: created.name,
+      assetCount: count,
+    );
+  }
+
   Future<List<PhotoLibraryAssetFile>> getImagesFromCollection({
     required String collectionId,
     int limit = 120,
@@ -219,6 +248,7 @@ class MediaService {
             assetId: asset.id,
             fileName: exportedFile.path.split('/').last,
             file: exportedFile,
+            asset: asset,
           ),
         );
         if (files.length >= limit) {
@@ -232,11 +262,94 @@ class MediaService {
     return files;
   }
 
+  Future<List<PhotoLibraryAssetFile>> getRecentImageAssets({
+    int limit = 120,
+    Set<String> excludeAssetIds = const {},
+  }) async {
+    final hasAccess = await requestPhotoLibraryAccess();
+    if (!hasAccess) {
+      return const [];
+    }
+
+    final albums = await PhotoManager.getAssetPathList(
+      type: RequestType.image,
+      onlyAll: true,
+      filterOption: FilterOptionGroup(
+        orders: [
+          const OrderOption(
+            type: OrderOptionType.createDate,
+            asc: false,
+          ),
+        ],
+      ),
+    );
+
+    if (albums.isEmpty) {
+      return const [];
+    }
+
+    final files = <PhotoLibraryAssetFile>[];
+    final album = albums.first;
+    const pageSize = 80;
+    var page = 0;
+
+    while (files.length < limit) {
+      final assets = await album.getAssetListPaged(
+        page: page,
+        size: pageSize,
+      );
+      if (assets.isEmpty) {
+        break;
+      }
+
+      for (final asset in assets) {
+        if (excludeAssetIds.contains(asset.id)) {
+          continue;
+        }
+        final exportedFile = await _exportAssetAsJpeg(asset);
+        if (exportedFile == null) {
+          continue;
+        }
+        files.add(
+          PhotoLibraryAssetFile(
+            assetId: asset.id,
+            fileName: exportedFile.path.split('/').last,
+            file: exportedFile,
+            asset: asset,
+          ),
+        );
+        if (files.length >= limit) {
+          break;
+        }
+      }
+
+      page += 1;
+    }
+
+    return files;
+  }
+
+  Future<bool> copyAssetToCollection({
+    required AssetEntity asset,
+    required String collectionId,
+  }) async {
+    if (collectionId.trim().isEmpty) {
+      return false;
+    }
+    final path = await AssetPathEntity.fromId(collectionId);
+    await PhotoManager.editor.copyAssetToPath(
+      asset: asset,
+      pathEntity: path,
+    );
+    return true;
+  }
+
   Future<File?> _exportAssetAsJpeg(AssetEntity asset) async {
     final title = asset.title ?? asset.id;
     final safeAssetId = asset.id.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     final safeName = title.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-    final tempDir = Directory('${Directory.systemTemp.path}/cinduhrella_exports');
+    final tempDir =
+        Directory('${Directory.systemTemp.path}/cinduhrella_exports');
     if (!await tempDir.exists()) {
       await tempDir.create(recursive: true);
     }

@@ -37,13 +37,15 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
   bool _processing = false;
   bool _consentGranted = false;
   bool _ownerOnlyMode = true;
+  bool _autoCurateIntoAlbum = false;
   PhotoImportJob? _lastQueuedJob;
   UserProfile? _profile;
+  static const String _recommendedAlbumName = 'Cinduhrella';
 
   static const List<String> _guidedSteps = [
     'Open Apple Photos.',
-    'Create or choose one personal album just for your own outfits.',
-    'Add your photos to that album.',
+    'Create one personal album named Cinduhrella.',
+    'Add photos where you are the person whose clothes should be imported.',
     'Come back here and select that album in Cinduhrella.',
   ];
 
@@ -80,6 +82,7 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
       _profile = profile;
       _consentGranted = preferences.consentGranted;
       _ownerOnlyMode = preferences.ownerOnlyImportEnabled;
+      _autoCurateIntoAlbum = preferences.autoCurateIntoAlbumEnabled;
       _ownerHintController.text = preferences.ownerIdentityHint.isNotEmpty
           ? preferences.ownerIdentityHint
           : (profile.fullName?.trim().isNotEmpty == true
@@ -106,17 +109,28 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
 
   void _syncSelectedCollectionFromPreferences() {
     final profile = _profile;
-    if (profile == null || _collections.isEmpty) {
+    if (_collections.isEmpty) {
       return;
     }
 
-    final targetId = profile.photoImportPreferences.sourceCollectionId.trim();
-    if (targetId.isEmpty) {
-      return;
+    final targetId =
+        profile?.photoImportPreferences.sourceCollectionId.trim() ?? '';
+    if (targetId.isNotEmpty) {
+      for (final collection in _collections) {
+        if (collection.id == targetId) {
+          if (_selectedCollection?.id != collection.id) {
+            setState(() {
+              _selectedCollection = collection;
+            });
+          }
+          return;
+        }
+      }
     }
 
     for (final collection in _collections) {
-      if (collection.id == targetId) {
+      if (collection.name.trim().toLowerCase() ==
+          _recommendedAlbumName.toLowerCase()) {
         if (_selectedCollection?.id != collection.id) {
           setState(() {
             _selectedCollection = collection;
@@ -125,6 +139,55 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
         return;
       }
     }
+  }
+
+  bool get _recommendedAlbumSelected =>
+      _selectedCollection?.name.trim().toLowerCase() ==
+      _recommendedAlbumName.toLowerCase();
+
+  bool get _canStartAlbumSync =>
+      !_processing &&
+      _consentGranted &&
+      (_selectedCollection != null || _autoCurateIntoAlbum);
+
+  String get _selectedAlbumLabel {
+    if (_selectedCollection != null) {
+      final suffix = _recommendedAlbumSelected ? ' • recommended' : '';
+      return '${_selectedCollection!.name} • ${_selectedCollection!.assetCount} photo(s)$suffix';
+    }
+    final storedName =
+        (_profile?.photoImportPreferences.sourceCollectionName ?? '').trim();
+    if (storedName.isNotEmpty) {
+      return storedName;
+    }
+    if (_autoCurateIntoAlbum) {
+      return 'Cinduhrella • will be created automatically';
+    }
+    return 'No personal album selected yet.';
+  }
+
+  Widget _buildPipelineChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFF6D56A8)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF4E475B),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickImages() async {
@@ -173,6 +236,8 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
             itemBuilder: (context, index) {
               final collection = _collections[index];
               final isActive = collection.id == _selectedCollection?.id;
+              final isRecommended = collection.name.trim().toLowerCase() ==
+                  _recommendedAlbumName.toLowerCase();
               return ListTile(
                 leading: CircleAvatar(
                   backgroundColor: isActive
@@ -187,7 +252,11 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
                   ),
                 ),
                 title: Text(collection.name),
-                subtitle: Text('${collection.assetCount} photo(s)'),
+                subtitle: Text(
+                  isRecommended
+                      ? '${collection.assetCount} photo(s) • recommended'
+                      : '${collection.assetCount} photo(s)',
+                ),
                 onTap: () => Navigator.of(context).pop(collection),
               );
             },
@@ -234,6 +303,7 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
       consentGranted: true,
       consentedAt: DateTime.now(),
       ownerOnlyImportEnabled: _ownerOnlyMode,
+      autoCurateIntoAlbumEnabled: _autoCurateIntoAlbum,
       ownerReferenceImageUrls: ownerReferences.take(3).toList(),
       ownerIdentityHint: _ownerHintController.text.trim(),
     );
@@ -303,8 +373,7 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
 
   Future<void> _startCollectionSync() async {
     final profile = _profile;
-    final collection = _selectedCollection;
-    if (profile == null || !_consentGranted || collection == null) {
+    if (profile == null || !_consentGranted) {
       return;
     }
 
@@ -322,30 +391,63 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
       return;
     }
 
-    final preferences = refreshedProfile.photoImportPreferences.copyWith(
+    PhotoLibraryCollection? collection = _selectedCollection;
+    if (_autoCurateIntoAlbum) {
+      collection = await _mediaService.ensureImageCollection(
+        name: _recommendedAlbumName,
+      );
+      if (mounted && collection != null) {
+        setState(() {
+          _selectedCollection = collection;
+        });
+      }
+    }
+
+    if (collection == null) {
+      if (mounted) {
+        setState(() {
+          _processing = false;
+        });
+      }
+      return;
+    }
+
+    var effectiveProfile = refreshedProfile;
+    if (_autoCurateIntoAlbum) {
+      final curatedProfile =
+          await _importService.autoCurateOwnerPhotosToAlbumIfNeeded(
+        profile: refreshedProfile,
+        force: true,
+      );
+      if (curatedProfile != null) {
+        effectiveProfile = curatedProfile;
+      }
+    }
+
+    final preferences = effectiveProfile.photoImportPreferences.copyWith(
       sourceCollectionId: collection.id,
       sourceCollectionName: collection.name,
       collectionAutoSyncEnabled: true,
     );
 
     await _importService.updatePreferences(
-      profile: refreshedProfile,
+      profile: effectiveProfile,
       preferences: preferences,
     );
 
     final savedProfile = UserProfile(
-      uid: refreshedProfile.uid,
-      fullName: refreshedProfile.fullName,
-      profilePictureUrl: refreshedProfile.profilePictureUrl,
-      userName: refreshedProfile.userName,
-      followingCount: refreshedProfile.followingCount,
-      followersCount: refreshedProfile.followersCount,
-      postCount: refreshedProfile.postCount,
-      following: refreshedProfile.following,
-      followers: refreshedProfile.followers,
-      posts: refreshedProfile.posts,
-      bodyMeasurements: refreshedProfile.bodyMeasurements,
-      stylePreferences: refreshedProfile.stylePreferences,
+      uid: effectiveProfile.uid,
+      fullName: effectiveProfile.fullName,
+      profilePictureUrl: effectiveProfile.profilePictureUrl,
+      userName: effectiveProfile.userName,
+      followingCount: effectiveProfile.followingCount,
+      followersCount: effectiveProfile.followersCount,
+      postCount: effectiveProfile.postCount,
+      following: effectiveProfile.following,
+      followers: effectiveProfile.followers,
+      posts: effectiveProfile.posts,
+      bodyMeasurements: effectiveProfile.bodyMeasurements,
+      stylePreferences: effectiveProfile.stylePreferences,
       photoImportPreferences: preferences,
     );
 
@@ -408,9 +510,89 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Set up one personal album first, then Cinduhrella will sync only that album while you use the app. You can still manually pick photos whenever you want.',
+                    'Create one album named Cinduhrella, fill it with your own looks, then let the app watch that album and send everything through the pending-review pipeline.',
                   ),
                   const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF4EFFD), Color(0xFFEEE8FB)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                'Recommended album',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF6D56A8),
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            const Text(
+                              _recommendedAlbumName,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF2F2940),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Once this album is selected, Cinduhrella will foreground-sync it while you use the app: remove background, isolate garments, extract AI details, then place everything into Pending Review.',
+                          style: TextStyle(
+                            color: Color(0xFF4E475B),
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _buildPipelineChip(
+                              Icons.auto_awesome_outlined,
+                              'Background removal',
+                            ),
+                            _buildPipelineChip(
+                              Icons.checkroom_outlined,
+                              'Garment extraction',
+                            ),
+                            _buildPipelineChip(
+                              Icons.psychology_alt_outlined,
+                              'AI details',
+                            ),
+                            _buildPipelineChip(
+                              Icons.fact_check_outlined,
+                              'Pending review',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                   if (_lastQueuedJob != null)
                     Container(
                       width: double.infinity,
@@ -482,6 +664,15 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
                         }),
                         const SizedBox(height: 6),
                         const Text(
+                          'Best experience: use a single album named Cinduhrella so the app always knows exactly where your owner photos live.',
+                          style: TextStyle(
+                            color: Color(0xFF4E475B),
+                            fontWeight: FontWeight.w600,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
                           'iPhone does not expose named People & Pets identities directly to third-party apps. A personal album is the reliable source we can keep in sync.',
                           style: TextStyle(
                             color: Color(0xFF6C647A),
@@ -516,7 +707,7 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
                                 ),
                                 label: Text(
                                   _selectedCollection == null
-                                      ? 'Choose Album'
+                                      ? 'Choose Cinduhrella Album'
                                       : 'Change Album',
                                 ),
                               ),
@@ -535,24 +726,13 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
                       child: const Icon(Icons.photo_album_outlined),
                     ),
                     title: const Text('Selected personal album'),
-                    subtitle: Text(
-                      _selectedCollection != null
-                          ? '${_selectedCollection!.name} • ${_selectedCollection!.assetCount} photo(s)'
-                          : ((_profile?.photoImportPreferences
-                                          .sourceCollectionName ??
-                                      '')
-                                  .trim()
-                                  .isNotEmpty
-                              ? _profile!.photoImportPreferences
-                                  .sourceCollectionName
-                              : 'No personal album selected yet.'),
-                    ),
+                    subtitle: Text(_selectedAlbumLabel),
                   ),
                   if (_collections.isEmpty && !_loadingCollections)
                     const Padding(
                       padding: EdgeInsets.only(bottom: 12),
                       child: Text(
-                        'No user-created albums are visible yet. Create one in Photos, add your images there, then tap Refresh Albums.',
+                        'No user-created albums are visible yet. Create a Cinduhrella album in Photos, add your images there, then tap Refresh Albums.',
                         style: TextStyle(
                           color: Color(0xFF6C647A),
                           height: 1.4,
@@ -588,6 +768,22 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
                     title: const Text('Owner-only extraction'),
                     subtitle: const Text(
                       'Prefer clothing worn by the likely phone owner and ignore other people when possible.',
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _autoCurateIntoAlbum,
+                    onChanged: _processing
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _autoCurateIntoAlbum = value;
+                            });
+                          },
+                    title:
+                        const Text('Auto-curate my library into Cinduhrella'),
+                    subtitle: const Text(
+                      'While the app is open, scan recent photos, detect likely owner outfits, and copy qualifying images into the Cinduhrella album before processing.',
                     ),
                   ),
                   ListTile(
@@ -650,24 +846,27 @@ class _OwnerPhotoImportPageState extends State<OwnerPhotoImportPage> {
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
-                    onPressed: _processing ||
-                            !_consentGranted ||
-                            _selectedCollection == null
-                        ? null
-                        : _startCollectionSync,
+                    onPressed: _canStartAlbumSync ? _startCollectionSync : null,
                     icon: const Icon(Icons.sync),
                     label: Text(
-                      _selectedCollection == null
-                          ? 'Choose An Album First'
-                          : 'Save Album & Start Sync',
+                      _autoCurateIntoAlbum
+                          ? 'Enable Auto-Curate & Start Sync'
+                          : _selectedCollection == null
+                              ? 'Choose An Album First'
+                              : (_recommendedAlbumSelected
+                                  ? 'Start Cinduhrella Auto-Import'
+                                  : 'Save Album & Start Sync'),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    (_profile?.photoImportPreferences.collectionAutoSyncEnabled ??
+                    (_profile?.photoImportPreferences
+                                .collectionAutoSyncEnabled ??
                             false)
-                        ? 'Foreground sync is enabled for ${_profile?.photoImportPreferences.sourceCollectionName.isNotEmpty == true ? _profile!.photoImportPreferences.sourceCollectionName : "your selected album"}.'
-                        : 'You can still manually choose photos below if you prefer.',
+                        ? 'Foreground sync is enabled for ${_profile?.photoImportPreferences.sourceCollectionName.isNotEmpty == true ? _profile!.photoImportPreferences.sourceCollectionName : "your selected album"}. Add new owner photos there and Cinduhrella will process them while the app is open.'
+                        : (_autoCurateIntoAlbum
+                            ? 'Auto-curation will try to pull likely owner outfit photos from your recent library into the Cinduhrella album, then process that album while the app is open.'
+                            : 'You can still manually choose photos below if you prefer, but the easiest path is a single Cinduhrella album.'),
                     style: const TextStyle(color: Color(0xFF6C647A)),
                   ),
                   const SizedBox(height: 16),

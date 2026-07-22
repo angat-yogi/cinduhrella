@@ -122,6 +122,8 @@ class AuthService {
           "ownerOnlyImportEnabled": true,
           "ownerReferenceImageUrls": [],
           "ownerIdentityHint": "",
+          "autoCurateIntoAlbumEnabled": false,
+          "curatedSourceAssetIds": [],
         },
       });
     } else {

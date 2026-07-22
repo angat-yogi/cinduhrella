@@ -7,8 +7,11 @@ class PhotoImportPreferences {
   final String sourceCollectionId;
   final String sourceCollectionName;
   final bool collectionAutoSyncEnabled;
+  final bool autoCurateIntoAlbumEnabled;
   final List<String> processedSourceAssetIds;
   final DateTime? lastCollectionSyncAt;
+  final List<String> curatedSourceAssetIds;
+  final DateTime? lastAutoCurateAt;
 
   const PhotoImportPreferences({
     this.consentGranted = false,
@@ -19,8 +22,11 @@ class PhotoImportPreferences {
     this.sourceCollectionId = '',
     this.sourceCollectionName = '',
     this.collectionAutoSyncEnabled = false,
+    this.autoCurateIntoAlbumEnabled = false,
     this.processedSourceAssetIds = const [],
     this.lastCollectionSyncAt,
+    this.curatedSourceAssetIds = const [],
+    this.lastAutoCurateAt,
   });
 
   factory PhotoImportPreferences.fromJson(Map<String, dynamic>? json) {
@@ -37,10 +43,14 @@ class PhotoImportPreferences {
       sourceCollectionId: json['sourceCollectionId'] ?? '',
       sourceCollectionName: json['sourceCollectionName'] ?? '',
       collectionAutoSyncEnabled: json['collectionAutoSyncEnabled'] ?? false,
+      autoCurateIntoAlbumEnabled: json['autoCurateIntoAlbumEnabled'] ?? false,
       processedSourceAssetIds:
           List<String>.from(json['processedSourceAssetIds'] ?? const []),
       lastCollectionSyncAt:
           DateTime.tryParse(json['lastCollectionSyncAt'] ?? ''),
+      curatedSourceAssetIds:
+          List<String>.from(json['curatedSourceAssetIds'] ?? const []),
+      lastAutoCurateAt: DateTime.tryParse(json['lastAutoCurateAt'] ?? ''),
     );
   }
 
@@ -54,8 +64,11 @@ class PhotoImportPreferences {
       'sourceCollectionId': sourceCollectionId,
       'sourceCollectionName': sourceCollectionName,
       'collectionAutoSyncEnabled': collectionAutoSyncEnabled,
+      'autoCurateIntoAlbumEnabled': autoCurateIntoAlbumEnabled,
       'processedSourceAssetIds': processedSourceAssetIds,
       'lastCollectionSyncAt': lastCollectionSyncAt?.toIso8601String(),
+      'curatedSourceAssetIds': curatedSourceAssetIds,
+      'lastAutoCurateAt': lastAutoCurateAt?.toIso8601String(),
     };
   }
 
@@ -68,8 +81,11 @@ class PhotoImportPreferences {
     String? sourceCollectionId,
     String? sourceCollectionName,
     bool? collectionAutoSyncEnabled,
+    bool? autoCurateIntoAlbumEnabled,
     List<String>? processedSourceAssetIds,
     DateTime? lastCollectionSyncAt,
+    List<String>? curatedSourceAssetIds,
+    DateTime? lastAutoCurateAt,
   }) {
     return PhotoImportPreferences(
       consentGranted: consentGranted ?? this.consentGranted,
@@ -83,9 +99,14 @@ class PhotoImportPreferences {
       sourceCollectionName: sourceCollectionName ?? this.sourceCollectionName,
       collectionAutoSyncEnabled:
           collectionAutoSyncEnabled ?? this.collectionAutoSyncEnabled,
+      autoCurateIntoAlbumEnabled:
+          autoCurateIntoAlbumEnabled ?? this.autoCurateIntoAlbumEnabled,
       processedSourceAssetIds:
           processedSourceAssetIds ?? this.processedSourceAssetIds,
       lastCollectionSyncAt: lastCollectionSyncAt ?? this.lastCollectionSyncAt,
+      curatedSourceAssetIds:
+          curatedSourceAssetIds ?? this.curatedSourceAssetIds,
+      lastAutoCurateAt: lastAutoCurateAt ?? this.lastAutoCurateAt,
     );
   }
 }

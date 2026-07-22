@@ -26,6 +26,8 @@ class OwnerPhotoImportResult {
 }
 
 class OwnerPhotoImportService {
+  static const String recommendedAlbumName = 'Cinduhrella';
+
   OwnerPhotoImportService() {
     final getIt = GetIt.instance;
     _databaseService = getIt.get<DatabaseService>();
@@ -86,6 +88,119 @@ class OwnerPhotoImportService {
       photoImportPreferences: preferences,
     );
     await _databaseService.updateUserStyleProfile(profile.uid!, updated);
+  }
+
+  Future<UserProfile?> autoCurateOwnerPhotosToAlbumIfNeeded({
+    required UserProfile profile,
+    bool force = false,
+    int limit = 48,
+  }) async {
+    final preferences = profile.photoImportPreferences;
+    final userId = profile.uid!;
+
+    if (!preferences.consentGranted ||
+        !preferences.autoCurateIntoAlbumEnabled) {
+      return null;
+    }
+
+    final ownerReferences = [
+      ...preferences.ownerReferenceImageUrls,
+      if ((profile.profilePictureUrl ?? '').trim().isNotEmpty)
+        profile.profilePictureUrl!.trim(),
+    ];
+    if (ownerReferences.isEmpty) {
+      return null;
+    }
+
+    final lastRunAt = preferences.lastAutoCurateAt;
+    if (!force &&
+        lastRunAt != null &&
+        DateTime.now().difference(lastRunAt) < const Duration(minutes: 10)) {
+      return null;
+    }
+
+    final album = await _mediaService.ensureImageCollection(
+      name: recommendedAlbumName,
+    );
+    if (album == null) {
+      return null;
+    }
+
+    final recentAssets = await _mediaService.getRecentImageAssets(
+      limit: limit,
+      excludeAssetIds: preferences.curatedSourceAssetIds.toSet(),
+    );
+    if (recentAssets.isEmpty) {
+      final updatedPreferences = preferences.copyWith(
+        sourceCollectionId: album.id,
+        sourceCollectionName: album.name,
+        collectionAutoSyncEnabled: true,
+        lastAutoCurateAt: DateTime.now(),
+      );
+      await updatePreferences(
+        profile: profile,
+        preferences: updatedPreferences,
+      );
+      return _copyProfileWithPreferences(profile, updatedPreferences);
+    }
+
+    final ownerHint = [
+      profile.fullName,
+      profile.userName,
+      preferences.ownerIdentityHint,
+      ...ownerReferences.take(2),
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' | ');
+
+    final curatedIds = <String>[];
+    for (final candidate in recentAssets) {
+      final tempImageUrl = await _storageService.uploadCaptureImage(
+        file: candidate.file,
+        uid: userId,
+        sessionId: 'library_curation',
+      );
+      if (tempImageUrl == null) {
+        curatedIds.add(candidate.assetId);
+        continue;
+      }
+
+      final details = await _chatService.getOwnerPhotoClothingDetails(
+        tempImageUrl,
+        ownerHint: ownerHint,
+        ownerOnlyMode: preferences.ownerOnlyImportEnabled,
+      );
+
+      final ownerMatchConfidence =
+          double.tryParse(details['ownerMatchConfidence'] ?? '') ?? 0;
+      final confidence = _estimateConfidence(details, ownerMatchConfidence);
+      final type = (details['type'] ?? '').trim();
+
+      if (ownerMatchConfidence >= 0.82 &&
+          confidence >= 0.72 &&
+          type.isNotEmpty) {
+        await _mediaService.copyAssetToCollection(
+          asset: candidate.asset,
+          collectionId: album.id,
+        );
+      }
+
+      curatedIds.add(candidate.assetId);
+    }
+
+    final updatedPreferences = preferences.copyWith(
+      sourceCollectionId: album.id,
+      sourceCollectionName: album.name,
+      collectionAutoSyncEnabled: true,
+      lastAutoCurateAt: DateTime.now(),
+      curatedSourceAssetIds: [
+        ...curatedIds,
+        ...preferences.curatedSourceAssetIds,
+      ].take(500).toList(),
+    );
+    await updatePreferences(
+      profile: profile,
+      preferences: updatedPreferences,
+    );
+    return _copyProfileWithPreferences(profile, updatedPreferences);
   }
 
   Future<PhotoImportJob?> syncSelectedCollectionIfNeeded({
@@ -167,7 +282,29 @@ class OwnerPhotoImportService {
       profile: refreshedProfile,
       images: assets.map((asset) => asset.file).toList(growable: false),
       mode: PhotoImportJobMode.ownerLibraryAutoScan,
-      title: 'Sync ${preferences.sourceCollectionName.isEmpty ? "selected collection" : preferences.sourceCollectionName}',
+      title:
+          'Sync ${preferences.sourceCollectionName.isEmpty ? "selected collection" : preferences.sourceCollectionName}',
+    );
+  }
+
+  UserProfile _copyProfileWithPreferences(
+    UserProfile profile,
+    PhotoImportPreferences preferences,
+  ) {
+    return UserProfile(
+      uid: profile.uid,
+      fullName: profile.fullName,
+      profilePictureUrl: profile.profilePictureUrl,
+      userName: profile.userName,
+      followingCount: profile.followingCount,
+      followersCount: profile.followersCount,
+      postCount: profile.postCount,
+      following: profile.following,
+      followers: profile.followers,
+      posts: profile.posts,
+      bodyMeasurements: profile.bodyMeasurements,
+      stylePreferences: profile.stylePreferences,
+      photoImportPreferences: preferences,
     );
   }
 

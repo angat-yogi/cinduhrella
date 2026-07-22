@@ -23,6 +23,7 @@ import 'package:cinduhrella/shared/unassigned_item.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -57,6 +58,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final ValueNotifier<String> _searchHintNotifier;
   late final Future<UserProfile> _outfitFeedUserFuture;
   bool _collectionSyncInFlight = false;
+  bool _photoImportNudgeDismissed = false;
+  UserProfile? _homeProfile;
+  static const String _photoImportNudgeKey =
+      'home_photo_import_nudge_dismissed_v1';
 
   @override
   void initState() {
@@ -67,9 +72,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _ownerPhotoImportService = _getIt.get<OwnerPhotoImportService>();
     _searchHintNotifier = ValueNotifier<String>("Search for an item...");
     _outfitFeedUserFuture = _getUserProfileInformation(_authService.user!.uid);
+    _loadHomePreferences();
     _fetchProfileDetails();
     _startHintRotation(); // ✅ Start rotating search hints
     unawaited(_maybeStartCollectionSync());
+  }
+
+  Future<void> _loadHomePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _photoImportNudgeDismissed = prefs.getBool(_photoImportNudgeKey) ?? false;
+    });
   }
 
   void _startHintRotation() {
@@ -97,16 +113,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _fetchProfileDetails() async {
     String? uid = _authService.user?.uid;
     if (uid != null) {
-      String? fetchedUserName = _authService.user?.displayName ??
-          (await _databaseService.getUserProfile(uid: uid))?.userName;
-      String? profilePicture = _authService.user?.photoURL ??
-          (await _databaseService.getUserProfile(uid: uid))?.profilePictureUrl;
+      final userProfile = await _databaseService.getUserProfile(uid: uid);
+      String? fetchedUserName =
+          _authService.user?.displayName ?? userProfile?.userName;
+      String? profilePicture =
+          _authService.user?.photoURL ?? userProfile?.profilePictureUrl;
 
       if (mounted) {
         // ✅ Check before calling setState
         setState(() {
           userName = fetchedUserName ?? 'Unknown User';
           profileImageUrl = profilePicture ?? '';
+          _homeProfile = userProfile;
         });
       }
     }
@@ -124,10 +142,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     _collectionSyncInFlight = true;
     try {
-      final profile = await _databaseService.getUserProfile(uid: uid);
+      var profile = await _databaseService.getUserProfile(uid: uid);
       if (profile == null) {
         return;
       }
+      final curatedProfile =
+          await _ownerPhotoImportService.autoCurateOwnerPhotosToAlbumIfNeeded(
+        profile: profile,
+      );
+      profile = curatedProfile ?? profile;
       await _ownerPhotoImportService.syncSelectedCollectionIfNeeded(
         profile: profile,
       );
@@ -194,13 +217,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
       floatingActionButton: (_selectedIndex == 0)
           ? FloatingActionButton(
-              onPressed: () {
-                _showAddItemDialog(
-                    context); // ✅ Add Item only on Home & Rooms Page
-              },
+              onPressed: _showHomeAddActions,
               child: const Icon(Icons.add),
             )
-          : null, // ✅ Hides FAB on other pages (Style, Outfits, Trips)
+          : null,
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
@@ -240,6 +260,181 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       builder: (context) {
         return const AddItemDialog();
       },
+    );
+  }
+
+  Future<void> _setPhotoImportNudgeDismissed(bool dismissed) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_photoImportNudgeKey, dismissed);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _photoImportNudgeDismissed = dismissed;
+    });
+  }
+
+  Future<void> _openPhotoImportManager() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const OwnerPhotoImportPage(),
+      ),
+    );
+    await _fetchProfileDetails();
+    unawaited(_maybeStartCollectionSync());
+  }
+
+  Future<void> _showStoreImportDialog() async {
+    final controller = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Import From Store Link'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Paste an Amazon, Walmart, or product page link. We will use this entry point for online-item import next.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Store URL',
+                  hintText: 'https://...',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Store-link import entry added. Product-page parsing is the next step.',
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Save Link'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+  }
+
+  Future<void> _showHomeAddActions() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Add To Closet',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Choose the fastest way to get items into pending review or directly into your closet.',
+                  style: TextStyle(color: Color(0xFF6C647A)),
+                ),
+                const SizedBox(height: 16),
+                _homeActionTile(
+                  icon: Icons.photo_library_outlined,
+                  title: 'My Photos',
+                  subtitle:
+                      'Manual picks, Cinduhrella album sync, and automation.',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _openPhotoImportManager();
+                  },
+                ),
+                _homeActionTile(
+                  icon: Icons.camera_outdoor_outlined,
+                  title: 'Bulk Capture',
+                  subtitle: 'Upload a quick batch of wardrobe photos.',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.push(
+                      this.context,
+                      MaterialPageRoute(
+                        builder: (context) => const BulkCapturePage(),
+                      ),
+                    );
+                  },
+                ),
+                _homeActionTile(
+                  icon: Icons.add_a_photo_outlined,
+                  title: 'Single Item',
+                  subtitle: 'Add one image and fill details manually.',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showAddItemDialog(this.context);
+                  },
+                ),
+                _homeActionTile(
+                  icon: Icons.shopping_bag_outlined,
+                  title: 'Store Link',
+                  subtitle:
+                      'Amazon, Walmart, or any product page. Entry point ready.',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showStoreImportDialog();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _homeActionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: const Color(0xFFECE7FA),
+        foregroundColor: const Color(0xFF6D56A8),
+        child: Icon(icon),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      onTap: onTap,
     );
   }
 
@@ -522,23 +717,103 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       (job?.sessionId ?? '').isNotEmpty,
                   orElse: () => null,
                 );
+            final preferences = _homeProfile?.photoImportPreferences;
+            final hasImportSetup = preferences != null &&
+                (preferences.consentGranted ||
+                    preferences.autoCurateIntoAlbumEnabled ||
+                    preferences.sourceCollectionId.isNotEmpty ||
+                    preferences.sourceCollectionName.isNotEmpty);
+            final selectedSourceName =
+                preferences?.sourceCollectionName.trim().isNotEmpty == true
+                    ? preferences!.sourceCollectionName.trim()
+                    : OwnerPhotoImportService.recommendedAlbumName;
+            final showCompactStatus = hasImportSetup ||
+                draftCount > 0 ||
+                activeJobs.isNotEmpty ||
+                !_photoImportNudgeDismissed;
+
+            if (!showCompactStatus) {
+              return const SizedBox.shrink();
+            }
 
             return Card(
+              elevation: 0,
+              color: const Color(0xFFF7F2FC),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Quick-Start Closet",
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                hasImportSetup
+                                    ? 'Cinduhrella Import'
+                                    : 'Set Up Smart Import',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                hasImportSetup
+                                    ? draftCount == 0
+                                        ? 'New owner photos can flow into pending review automatically while you use the app.'
+                                        : '$draftCount item(s) are waiting in review, including $ownerImportCount from personal photos.'
+                                    : 'Choose your Cinduhrella photo album once, then let the app keep feeding pending review without constant manual uploads.',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  height: 1.45,
+                                  color: Color(0xFF5E5870),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (!hasImportSetup && !_photoImportNudgeDismissed)
+                          IconButton(
+                            tooltip: 'Hide for now',
+                            onPressed: () {
+                              unawaited(_setPhotoImportNudgeDismissed(true));
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      draftCount == 0
-                          ? "Skip manual item entry. Upload wardrobe shots or import from your personal photos, then confirm only the pieces you want in your closet."
-                          : "You have $draftCount draft item(s) pending review, including $ownerImportCount from personal photos. Confirm them to improve planner quality.",
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        _buildImportStatusChip(
+                          icon: Icons.folder_special_outlined,
+                          label: hasImportSetup
+                              ? selectedSourceName
+                              : 'Choose album',
+                          accent: const Color(0xFF6D56A8),
+                        ),
+                        _buildImportStatusChip(
+                          icon: Icons.auto_awesome_outlined,
+                          label: preferences?.autoCurateIntoAlbumEnabled == true
+                              ? 'Auto-curation on'
+                              : 'Manual picks',
+                          accent: const Color(0xFF3D8B74),
+                        ),
+                        _buildImportStatusChip(
+                          icon: Icons.fact_check_outlined,
+                          label: '$draftCount pending',
+                          accent: const Color(0xFFCB6A4A),
+                        ),
+                      ],
                     ),
                     if (activeJobs.isNotEmpty) ...[
                       const SizedBox(height: 12),
@@ -551,8 +826,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               vertical: 10,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.035),
-                              borderRadius: BorderRadius.circular(14),
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
                             ),
                             child: Row(
                               children: [
@@ -567,6 +842,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 Expanded(
                                   child: Text(
                                     '${job.title}: ${job.processedImages}/${job.totalImages} processed',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                                 TextButton(
@@ -585,57 +863,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       spacing: 12,
                       runSpacing: 12,
                       children: [
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const BulkCapturePage(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.camera_outdoor_outlined),
+                        FilledButton.icon(
+                          onPressed: _openPhotoImportManager,
+                          icon: const Icon(Icons.photo_library_outlined),
                           label: Text(
-                            draftCount == 0
-                                ? "Start Bulk Capture"
-                                : "Add Wardrobe Photos",
+                            hasImportSetup ? 'Manage Import' : 'Set Up Import',
                           ),
                         ),
-                        FilledButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const OwnerPhotoImportPage(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.photo_library_outlined),
-                          label: const Text("Import My Photos"),
+                        OutlinedButton.icon(
+                          onPressed: draftCount > 0
+                              ? () {
+                                  _openPendingReview(
+                                    sessionId:
+                                        latestCompletedOwnerJob?.sessionId,
+                                  );
+                                }
+                              : _showHomeAddActions,
+                          icon: Icon(
+                            draftCount > 0
+                                ? Icons.fact_check_outlined
+                                : Icons.add_circle_outline_rounded,
+                          ),
+                          label: Text(
+                            draftCount > 0 ? 'Review Pending' : 'Add Items',
+                          ),
                         ),
                       ],
                     ),
-                    if (ownerImportCount > 0) ...[
+                    if (ownerImportCount > 0 || hasImportSetup) ...[
                       const SizedBox(height: 12),
                       Text(
-                        '$ownerImportCount personal-photo draft(s) are waiting in pending review. Nothing is auto-added to your closet.',
-                        style: TextStyle(color: Colors.grey.shade700),
-                      ),
-                    ],
-                    if (draftCount > 0) ...[
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: () {
-                          _openPendingReview(
-                            sessionId: latestCompletedOwnerJob?.sessionId,
-                          );
-                        },
-                        icon: const Icon(Icons.fact_check_outlined),
-                        label: Text(
-                          latestCompletedOwnerJob?.sessionId != null
-                              ? 'Open Latest Pending Review'
-                              : 'Open Pending Review',
+                        hasImportSetup
+                            ? 'Nothing is auto-added to your closet. Everything still lands in pending review first.'
+                            : 'Tip: use the + button for quick manual adds, bulk capture, or store links.',
+                        style: const TextStyle(
+                          color: Color(0xFF6C647A),
+                          height: 1.4,
                         ),
                       ),
                     ],
@@ -779,6 +1042,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildImportStatusChip({
+    required IconData icon,
+    required String label,
+    required Color accent,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: accent),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: accent,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
