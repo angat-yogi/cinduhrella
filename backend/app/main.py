@@ -8,8 +8,10 @@ from typing import Any
 import cv2
 import numpy as np
 from fashn_human_parser import FashnHumanParser, IDS_TO_LABELS
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from PIL import Image, ImageOps
+from rembg import new_session, remove
+from starlette.concurrency import run_in_threadpool
 from ultralytics import YOLO
 
 app = FastAPI(title="Cinduhrella Closet Scanner")
@@ -25,6 +27,13 @@ MAX_DETECTIONS = int(os.getenv("CLOSET_SCANNER_MAX_DETECTIONS", "6"))
 MIN_GARMENT_AREA_RATIO = float(os.getenv("GARMENT_MIN_AREA_RATIO", "0.003"))
 MIN_GARMENT_SIDE_PX = int(os.getenv("GARMENT_MIN_SIDE_PX", "28"))
 MAX_GARMENTS_PER_IMAGE = int(os.getenv("GARMENT_MAX_ITEMS", "10"))
+BACKGROUND_REMOVAL_MODEL = os.getenv(
+    "BACKGROUND_REMOVAL_MODEL",
+    "birefnet-general",
+)
+MAX_BACKGROUND_REMOVAL_BYTES = int(
+    os.getenv("BACKGROUND_REMOVAL_MAX_BYTES", str(20 * 1024 * 1024))
+)
 
 
 LABEL_NORMALIZATION = {
@@ -125,6 +134,22 @@ def get_model() -> YOLO:
 @lru_cache(maxsize=1)
 def get_human_parser() -> FashnHumanParser:
     return FashnHumanParser()
+
+
+@lru_cache(maxsize=1)
+def get_background_removal_session():
+    return new_session(BACKGROUND_REMOVAL_MODEL)
+
+
+def remove_image_background(image_bytes: bytes) -> bytes:
+    output = remove(
+        image_bytes,
+        session=get_background_removal_session(),
+        force_return_bytes=True,
+    )
+    if not isinstance(output, bytes):
+        raise TypeError("Background remover returned an unexpected result.")
+    return output
 
 
 def normalize_label(raw_label: str) -> tuple[str, str]:
@@ -255,6 +280,43 @@ def should_keep_garment(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/remove-background", response_class=Response)
+async def remove_background(file: UploadFile = File(...)) -> Response:
+    image_bytes = await file.read(MAX_BACKGROUND_REMOVAL_BYTES + 1)
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+    if len(image_bytes) > MAX_BACKGROUND_REMOVAL_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Uploaded image exceeds the background-removal size limit of "
+                f"{MAX_BACKGROUND_REMOVAL_BYTES} bytes."
+            ),
+        )
+
+    try:
+        ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).verify()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file could not be decoded as an image.",
+        ) from exc
+
+    try:
+        output_bytes = await run_in_threadpool(remove_image_background, image_bytes)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Background removal failed: {exc}",
+        ) from exc
+
+    return Response(
+        content=output_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": 'inline; filename="background-removed.png"'},
+    )
 
 
 @app.post("/detect-clothes")

@@ -4,6 +4,7 @@ Minimal FastAPI service for the Cinduhrella closet scanner MVP.
 
 It now supports:
 
+- `POST /remove-background` for general-purpose local background removal
 - `POST /detect-clothes` for YOLO closet scanning
 - `POST /extract-garments` for multi-item garment extraction using FASHN Human Parser
 
@@ -27,7 +28,20 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+The first background-removal request downloads the configured model. The model
+is cached locally and its inference session is reused for later requests. Set
+`BACKGROUND_REMOVAL_MODEL` to override the default `birefnet-general` model.
+
 ## Endpoint
+
+`POST /remove-background`
+
+Multipart form field:
+
+- `file`: image upload
+
+The response body is a PNG with a transparent background. The maximum input
+size defaults to 20 MB and can be changed with `BACKGROUND_REMOVAL_MAX_BYTES`.
 
 `POST /detect-clothes`
 

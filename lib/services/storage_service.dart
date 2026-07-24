@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path/path.dart' as path;
 import 'package:logger/logger.dart';
@@ -10,11 +12,21 @@ import 'package:path_provider/path_provider.dart';
 class StorageService {
   final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
   final Logger _logger = Logger();
-  static const String _photoRoomEndpoint =
-      'https://sdk.photoroom.com/v1/segment';
-  bool _backgroundRemovalDisabled = false;
 
   StorageService();
+
+  String get _backgroundRemovalEndpoint {
+    final configured = dotenv.env['CLOSET_SCANNER_BACKEND_URL'] ?? '';
+    final String baseUrl;
+    if (configured.isNotEmpty) {
+      baseUrl = configured;
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      baseUrl = 'http://10.0.2.2:8000';
+    } else {
+      baseUrl = 'http://127.0.0.1:8000';
+    }
+    return '${baseUrl.replaceFirst(RegExp(r'/$'), '')}/remove-background';
+  }
 
   Future<String?> uploadImages(
       {required File file, required String uid}) async {
@@ -103,49 +115,37 @@ class StorageService {
     Uint8List bytes, {
     required String fileName,
   }) async {
-    if (_backgroundRemovalDisabled) {
-      return null;
-    }
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(_backgroundRemovalEndpoint),
+      )..files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: fileName,
+          ),
+        );
 
-    final apiKey = dotenv.env['PHOTOROOM_API_KEY'] ?? '';
-    if (apiKey.isEmpty) {
-      _logger.w(
-        'PHOTOROOM_API_KEY is not configured. Skipping background removal.',
+      final response = await request.send().timeout(
+            const Duration(minutes: 2),
+          );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return Uint8List.fromList(await response.stream.toBytes());
+      }
+
+      final responseBody = await response.stream.bytesToString();
+      _logger.e(
+        'Local background removal failed: '
+        '${response.statusCode} $responseBody',
       );
-      return null;
-    }
-
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse(_photoRoomEndpoint),
-    )
-      ..headers['x-api-key'] = apiKey
-      ..fields['format'] = 'png'
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'image_file',
-          bytes,
-          filename: fileName,
-        ),
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Local background removal request failed. Using the original image.',
+        error: error,
+        stackTrace: stackTrace,
       );
-
-    final response = await request.send();
-    if (response.statusCode == 200) {
-      return Uint8List.fromList(await response.stream.toBytes());
     }
-
-    final responseBody = await response.stream.bytesToString();
-    if (response.statusCode == 402) {
-      _backgroundRemovalDisabled = true;
-      _logger.w(
-        'PhotoRoom quota exhausted. Disabling background removal for this app session and falling back to original images.',
-      );
-      return null;
-    }
-
-    _logger.e(
-      'PhotoRoom background removal failed: ${response.statusCode} $responseBody',
-    );
     return null;
   }
 
